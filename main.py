@@ -64,6 +64,8 @@ async def shutdown_event():
 # WEB UI ROUTES
 # ============================================================================
 
+# ... existing imports ...
+
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request, db: Session = Depends(get_db)):
     """Dashboard homepage"""
@@ -75,6 +77,15 @@ async def root(request: Request, db: Session = Depends(get_db)):
         "scheduled_jobs": scheduler.get_scheduled_jobs()
     })
 
+# ADD THIS NEW ROUTE HERE ↓
+@app.get("/reports", response_class=HTMLResponse)
+async def reports_page(request: Request, db: Session = Depends(get_db)):
+    """Reports and analytics page"""
+    return templates.TemplateResponse("reports.html", {
+        "request": request
+    })
+
+# ... rest of the code ...
 
 # ============================================================================
 # JOB SEARCH CRUD API
