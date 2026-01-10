@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 class ClayWebhookService:
-    """Service to send job data to Clay webhook in batches"""
+    """Service to send job data to Clay webhook - ONE JOB AT A TIME"""
     
     def __init__(
         self,
@@ -53,16 +53,17 @@ class ClayWebhookService:
         return payload
     
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
-    async def _send_batch(self, batch: List[Dict]) -> bool:
-        """Send a batch of jobs to Clay webhook"""
+    async def _send_single_job(self, job_data: Dict) -> bool:
+        """Send a SINGLE job to Clay webhook"""
         try:
-            response = await self.client.post(self.webhook_url, json=batch)
+            # Send as a single object, NOT an array
+            response = await self.client.post(self.webhook_url, json=job_data)
             response.raise_for_status()
             
-            logger.info(f"Successfully sent batch of {len(batch)} jobs to Clay")
+            logger.debug(f"Successfully sent job to Clay: {job_data.get('Job Title', 'Unknown')}")
             return True
         except httpx.HTTPError as e:
-            logger.error(f"Failed to send batch to Clay: {e}")
+            logger.error(f"Failed to send job to Clay: {e}")
             raise
     
     async def send_jobs(
@@ -72,7 +73,13 @@ class ClayWebhookService:
         url_scraped: str
     ) -> int:
         """
-        Send jobs to Clay webhook in batches
+        Send jobs to Clay webhook ONE BY ONE in batches
+        
+        Example: 8 jobs per batch, 2 second wait between batches
+        - Batch 1: Send 8 jobs individually (with small delays)
+        - Wait 2 seconds
+        - Batch 2: Send next 8 jobs individually
+        - And so on...
         
         Returns:
             Number of jobs successfully sent
@@ -97,18 +104,26 @@ class ClayWebhookService:
         
         sent_count = 0
         
-        for i, batch in enumerate(batches):
-            try:
-                await self._send_batch(batch)
-                sent_count += len(batch)
-                
-                # Wait between batches (except for the last one)
-                if i < len(batches) - 1:
-                    await asyncio.sleep(self.batch_interval_seconds)
+        for batch_num, batch in enumerate(batches, 1):
+            logger.info(f"Processing batch {batch_num}/{len(batches)} ({len(batch)} jobs)")
             
-            except Exception as e:
-                logger.error(f"Failed to send batch {i + 1}/{len(batches)}: {e}")
-                # Continue with next batch even if one fails
+            # Send each job in the batch individually
+            for job_payload in batch:
+                try:
+                    await self._send_single_job(job_payload)
+                    sent_count += 1
+                    
+                    # Small delay between individual jobs within a batch (100ms)
+                    await asyncio.sleep(0.1)
+                
+                except Exception as e:
+                    logger.error(f"Failed to send job '{job_payload.get('Job Title')}': {e}")
+                    # Continue with next job even if one fails
+            
+            # Wait between batches (except for the last one)
+            if batch_num < len(batches):
+                logger.info(f"Waiting {self.batch_interval_seconds}s before next batch...")
+                await asyncio.sleep(self.batch_interval_seconds)
         
         logger.info(f"Sent {sent_count}/{len(payloads)} jobs to Clay")
         return sent_count
