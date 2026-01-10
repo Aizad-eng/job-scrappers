@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkedIn Job Scraper Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #0066cc;
+            margin-bottom: 10px;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #0066cc;
+        }
+        
+        .stat-label {
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .job-searches {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th {
+            background: #f8f9fa;
+            padding: 12px;
+            text-align: left;
+            border-bottom: 2px solid #dee2e6;
+            font-weight: 600;
+        }
+        
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+        
+        .status-active {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-failed {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 0.9em;
+            transition: background 0.2s;
+        }
+        
+        .btn-primary {
+            background: #0066cc;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #0052a3;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        
+        .actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .api-docs {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔍 LinkedIn Job Scraper</h1>
+            <p>Automated job scraping and filtering system</p>
+        </header>
+        
+        <div class="api-docs">
+            <strong>📚 API Documentation:</strong> Visit <code>/docs</code> for interactive API documentation
+        </div>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value">{{ job_searches|length }}</div>
+                <div class="stat-label">Total Job Searches</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ job_searches|selectattr("is_active")|list|length }}</div>
+                <div class="stat-label">Active Searches</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ scheduled_jobs|length }}</div>
+                <div class="stat-label">Scheduled Jobs</div>
+            </div>
+        </div>
+        
+        <div class="job-searches">
+            <h2>Job Search Configurations</h2>
+            
+            {% if job_searches %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Keyword</th>
+                        <th>Platform</th>
+                        <th>Schedule</th>
+                        <th>Status</th>
+                        <th>Last Run</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for job in job_searches %}
+                    <tr>
+                        <td><strong>{{ job.name }}</strong></td>
+                        <td>{{ job.keyword }}</td>
+                        <td>{{ job.platform }}</td>
+                        <td><code>{{ job.cron_schedule }}</code></td>
+                        <td>
+                            {% if job.is_active %}
+                            <span class="status-badge status-active">Active</span>
+                            {% else %}
+                            <span class="status-badge status-inactive">Inactive</span>
+                            {% endif %}
+                            
+                            {% if job.last_status %}
+                            <span class="status-badge status-{{ job.last_status }}">{{ job.last_status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if job.last_run_at %}
+                            {{ job.last_run_at.strftime('%Y-%m-%d %H:%M') }}
+                            {% else %}
+                            Never
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="actions">
+                                <button class="btn btn-primary" onclick="triggerJob({{ job.id }})">Run Now</button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <p>No job searches configured yet.</p>
+                <p>Use the API at <code>/api/job-searches</code> to create your first job search.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <script>
+        async function triggerJob(jobSearchId) {
+            if (!confirm('Are you sure you want to trigger this job now?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/trigger-job', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ job_search_id: jobSearchId })
+                });
+                
+                if (response.ok) {
+                    alert('Job triggered successfully!');
+                    location.reload();
+                } else {
+                    const error = await response.json();
+                    alert('Failed to trigger job: ' + error.detail);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>
