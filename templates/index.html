@@ -42,6 +42,7 @@
             margin-top: 20px;
             display: flex;
             gap: 10px;
+            flex-wrap: wrap;
         }
         
         .btn {
@@ -75,6 +76,8 @@
         
         .btn-success:hover {
             background: #38a169;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(72, 187, 120, 0.3);
         }
         
         .btn-danger {
@@ -87,12 +90,14 @@
         }
         
         .btn-secondary {
-            background: #718096;
+            background: rgba(255,255,255,0.2);
             color: white;
+            border: 2px solid white;
         }
         
         .btn-secondary:hover {
-            background: #4a5568;
+            background: rgba(255,255,255,0.3);
+            transform: translateY(-2px);
         }
         
         .btn-small {
@@ -344,72 +349,6 @@
             width: auto;
         }
         
-        .tags-input {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            padding: 8px;
-            border: 2px solid #e2e8f0;
-            border-radius: 6px;
-            min-height: 50px;
-        }
-        
-        .tag {
-            background: #667eea;
-            color: white;
-            padding: 5px 10px;
-            border-radius: 15px;
-            font-size: 0.85em;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        
-        .tag-remove {
-            cursor: pointer;
-            font-weight: bold;
-        }
-        
-        .tag-input {
-            border: none;
-            outline: none;
-            flex: 1;
-            min-width: 150px;
-        }
-        
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        .alert {
-            padding: 15px 20px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-        }
-        
-        .alert-success {
-            background: #c6f6d5;
-            color: #22543d;
-            border-left: 4px solid #48bb78;
-        }
-        
-        .alert-error {
-            background: #fed7d7;
-            color: #742a2a;
-            border-left: 4px solid #f56565;
-        }
-        
         .tooltip {
             position: relative;
             display: inline-block;
@@ -441,8 +380,12 @@
                 <button class="btn btn-success" onclick="openCreateModal()">
                     ➕ Create New Job Search
                 </button>
-                <a href="/docs" class="btn btn-secondary" target="_blank">📚 API Docs</a>
-                <a href="/api/scheduler/status" class="btn btn-secondary" target="_blank">⚙️ Scheduler Status</a>
+                <a href="/reports" class="btn btn-secondary">
+                    📊 View Reports & Analytics
+                </a>
+                <a href="/docs" class="btn btn-secondary" target="_blank">
+                    📚 API Docs
+                </a>
             </div>
         </header>
         
@@ -504,9 +447,15 @@
                         </td>
                         <td>
                             <div class="actions">
-                                <button class="btn btn-primary btn-small" onclick="triggerJob({{ job.id }})">▶️ Run</button>
-                                <button class="btn btn-secondary btn-small" onclick="editJob({{ job.id }})">✏️ Edit</button>
-                                <button class="btn btn-danger btn-small" onclick="deleteJob({{ job.id }}, '{{ job.name }}')">🗑️ Delete</button>
+                                <button class="btn btn-primary btn-small" onclick="triggerJob({{ job.id }})" title="Run this job now">
+                                    ▶️ Run
+                                </button>
+                                <button class="btn btn-secondary btn-small" onclick="editJob({{ job.id }})" title="Edit job configuration">
+                                    ✏️ Edit
+                                </button>
+                                <button class="btn btn-danger btn-small" onclick="deleteJob({{ job.id }}, '{{ job.name }}')" title="Delete this job">
+                                    🗑️ Delete
+                                </button>
                             </div>
                         </td>
                     </tr>
