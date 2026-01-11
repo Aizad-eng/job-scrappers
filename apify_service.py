@@ -1,6 +1,6 @@
 import httpx
 import asyncio
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 from datetime import datetime, timedelta
 from config import settings
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -20,7 +20,7 @@ class ApifyService:
         self,
         actor_id: str,
         platform: str,
-        urls: List[str],
+        urls: Union[str, List[str]],
         count: int = 1000,
         scrape_company: bool = True,
         use_browser: bool = False,
@@ -32,7 +32,7 @@ class ApifyService:
         Args:
             actor_id: The Apify actor ID
             platform: 'linkedin' or 'indeed'
-            urls: List of search URLs
+            urls: Single URL string, comma-separated URL string, or list of URLs
             count: Max results
             scrape_company: Whether to scrape company details
             use_browser: For Indeed - use browser mode
@@ -42,6 +42,15 @@ class ApifyService:
             Dict with run information including 'id' and 'defaultDatasetId'
         """
         url = f"{self.BASE_URL}/acts/{actor_id}/runs"
+        
+        # Process URLs - convert string (single or comma-separated) to list
+        if isinstance(urls, str):
+            # Split by comma and strip whitespace from each URL
+            urls_list = [u.strip() for u in urls.split(',') if u.strip()]
+        else:
+            urls_list = urls
+        
+        logger.info(f"Processing {len(urls_list)} URL(s) for {platform}")
         
         # Validate count (Apify requires minimum 100 for LinkedIn)
         if platform == "linkedin" and count < 100:
@@ -57,7 +66,7 @@ class ApifyService:
                     "apifyProxyGroups": []
                 },
                 "scrapeJobs.scrapeCompany": scrape_company,
-                "scrapeJobs.searchUrl": urls[0] if urls else "",
+                "scrapeJobs.searchUrl": urls_list[0] if urls_list else "",
                 "startPage": 1,
                 "useBrowser": use_browser
             }
@@ -65,7 +74,7 @@ class ApifyService:
             payload = {
                 "count": count,
                 "scrapeCompany": scrape_company,
-                "urls": urls
+                "urls": urls_list
             }
         
         params = {"token": self.api_token}
