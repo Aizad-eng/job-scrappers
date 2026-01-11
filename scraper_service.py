@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict
 import logging
 
 from models import JobSearch, JobRun, ScrapedJob
