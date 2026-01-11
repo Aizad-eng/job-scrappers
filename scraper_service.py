@@ -139,9 +139,14 @@ class JobScraperService:
             logger.info(f"Waiting for Apify run to complete")
             final_status = await apify_service.wait_for_completion(run_data["id"])
             
+            logger.info(f"Apify finished with status: {final_status['status']}")
+            
             if final_status["status"] != "SUCCEEDED":
                 raise Exception(f"Apify run failed with status: {final_status['status']}")
             
+            # CHECKPOINT: Apify succeeded - update this immediately
+            job_run.apify_completed = True
+            self.db.commit()
             logger.info("Apify run completed successfully")
             
             # Step 3: Fetch results
@@ -151,8 +156,7 @@ class JobScraperService:
             
             job_run.jobs_found = len(jobs)
             self.db.commit()
-            
-            logger.info(f"Found {len(jobs)} jobs")
+            logger.info(f"Found {len(jobs)} jobs - committed to DB")
             
             if not jobs:
                 logger.info("No jobs found, marking as success")
@@ -178,7 +182,7 @@ class JobScraperService:
             job_run.jobs_filtered = len(filtered_jobs)
             self.db.commit()
             
-            logger.info(f"Filtered: {len(passed_jobs)} passed, {len(filtered_jobs)} filtered out")
+            logger.info(f"Filtered: {len(passed_jobs)} passed, {len(filtered_jobs)} filtered out - committed to DB")
             
             # Step 5: Save jobs to database (skip duplicates)
             saved_count = 0
@@ -238,7 +242,7 @@ class JobScraperService:
                 job_run.jobs_sent = sent_count
                 self.db.commit()
                 
-                logger.info(f"Successfully sent {sent_count} jobs to Clay")
+                logger.info(f"Successfully sent {sent_count} jobs to Clay - committed to DB")
                 
                 # Update sent status (only for jobs in this run)
                 for job in passed_jobs:
@@ -252,13 +256,14 @@ class JobScraperService:
                         pass  # Ignore errors for duplicates
                 
                 self.db.commit()
+                logger.info("Updated sent_to_clay flags")
             else:
                 logger.info("No jobs passed filters")
                 job_run.jobs_sent = 0
                 self.db.commit()
             
-            # Mark as successful
-            logger.info("Marking job run as successful")
+            # FINAL STEP: Mark as successful - DO THIS LAST
+            logger.info("All steps complete - marking job run as successful")
             job_run.status = "success"
             job_run.completed_at = datetime.utcnow()
             
@@ -266,6 +271,7 @@ class JobScraperService:
             job_search.last_status = "success"
             
             self.db.commit()
+            logger.info(f"Job run {job_run.id} COMPLETED SUCCESSFULLY and committed to DB")
             
             logger.info(
                 f"Job run {job_run.id} completed: "
