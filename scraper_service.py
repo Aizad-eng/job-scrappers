@@ -22,7 +22,7 @@ class JobScraperService:
         """Extract job ID based on platform"""
         if platform == "indeed":
             # Indeed might not have a direct ID field, create one from URL or other unique field
-            return job.get("id", job.get("jobKey", ""))
+            return str(job.get("id", job.get("jobKey", "")))
         else:  # linkedin
             return str(job.get("id", ""))
     
@@ -104,32 +104,32 @@ class JobScraperService:
         # Create job run record
         job_run = JobRun(
             job_search_id=job_search.id,
-            status="running"
+            status="running",
+            started_at=datetime.utcnow()
         )
         self.db.add(job_run)
         self.db.commit()
         self.db.refresh(job_run)
         
-        logger.info(f"Starting job run {job_run.id} for {platform} job search '{job_search.name}'")
+        logger.info(f"Created job run {job_run.id} for {platform} job search '{job_search.name}'")
         
         # Initialize services
-        apify_token = job_search.apify_token or settings.DEFAULT_APIFY_TOKEN
-        if not apify_token:
-            error_msg = "No Apify token configured"
-            job_run.status = "failed"
-            job_run.error_message = error_msg
-            job_run.completed_at = datetime.utcnow()
-            self.db.commit()
-            raise ValueError(error_msg)
-        
-        apify_service = ApifyService(apify_token)
-        clay_service = ClayWebhookService(
-            webhook_url=job_search.clay_webhook_url,
-            batch_size=job_search.batch_size,
-            batch_interval_ms=job_search.batch_interval_ms
-        )
+        apify_service = None
+        clay_service = None
         
         try:
+            # Get Apify token
+            apify_token = job_search.apify_token or settings.DEFAULT_APIFY_TOKEN
+            if not apify_token:
+                raise ValueError("No Apify token configured")
+            
+            apify_service = ApifyService(apify_token)
+            clay_service = ClayWebhookService(
+                webhook_url=job_search.clay_webhook_url,
+                batch_size=job_search.batch_size,
+                batch_interval_ms=job_search.batch_interval_ms
+            )
+            
             # Step 1: Start Apify actor
             logger.info(f"Starting {platform} Apify actor for URL: {job_search.search_url}")
             run_data = await apify_service.start_actor_run(
@@ -146,9 +146,13 @@ class JobScraperService:
             job_run.apify_dataset_id = run_data.get("defaultDatasetId")
             self.db.commit()
             
+            logger.info(f"Apify run started: {run_data['id']}")
+            
             # Step 2: Wait for completion
             logger.info(f"Waiting for {platform} Apify run {run_data['id']} to complete")
             final_status = await apify_service.wait_for_completion(run_data["id"])
+            
+            logger.info(f"Apify run completed with status: {final_status['status']}")
             
             if final_status["status"] != "SUCCEEDED":
                 raise Exception(f"Apify run failed with status: {final_status['status']}")
@@ -161,10 +165,14 @@ class JobScraperService:
             job_run.jobs_found = len(jobs)
             self.db.commit()
             
+            logger.info(f"Found {len(jobs)} jobs")
+            
             if not jobs:
                 logger.warning(f"No {platform} jobs found in dataset")
                 job_run.status = "success"
                 job_run.completed_at = datetime.utcnow()
+                job_search.last_run_at = datetime.utcnow()
+                job_search.last_status = "success"
                 self.db.commit()
                 return job_run
             
@@ -183,22 +191,52 @@ class JobScraperService:
             job_run.jobs_filtered = len(filtered_jobs)
             self.db.commit()
             
-            # Save all jobs to database
+            logger.info(f"Filter results: {len(passed_jobs)} passed, {len(filtered_jobs)} filtered")
+            
+            # Save all jobs to database (skip duplicates)
+            saved_count = 0
+            duplicate_count = 0
+            
             for job in jobs:
                 should_filter = job in filtered_jobs
                 filter_reason = job.get("filter_reason") if should_filter else None
                 
-                fields = self._extract_job_fields(job, platform)
-                
-                scraped_job = ScrapedJob(
-                    job_run_id=job_run.id,
-                    **fields,
-                    filtered_out=should_filter,
-                    filter_reason=filter_reason
-                )
-                self.db.add(scraped_job)
+                try:
+                    fields = self._extract_job_fields(job, platform)
+                    job_id = fields.get("job_id")
+                    
+                    # Check if job already exists
+                    existing = self.db.query(ScrapedJob).filter(
+                        ScrapedJob.job_id == job_id
+                    ).first()
+                    
+                    if existing:
+                        duplicate_count += 1
+                        logger.debug(f"Skipping duplicate job: {job_id}")
+                        continue
+                    
+                    # Save new job
+                    scraped_job = ScrapedJob(
+                        job_run_id=job_run.id,
+                        **fields,
+                        filtered_out=should_filter,
+                        filter_reason=filter_reason
+                    )
+                    self.db.add(scraped_job)
+                    saved_count += 1
+                    
+                    # Commit in batches of 100 to avoid huge transactions
+                    if saved_count % 100 == 0:
+                        self.db.commit()
+                        logger.debug(f"Committed batch of 100 jobs (total: {saved_count})")
+                    
+                except Exception as e:
+                    logger.error(f"Error saving job to database: {e}")
+                    continue
             
+            # Final commit
             self.db.commit()
+            logger.info(f"Saved {saved_count} new jobs to database ({duplicate_count} duplicates skipped)")
             
             # Step 5: Send to Clay
             if passed_jobs:
@@ -212,15 +250,25 @@ class JobScraperService:
                 
                 job_run.jobs_sent = sent_count
                 
-                # Update sent status in database
+                # Update sent status in database (only for new jobs)
                 for job in passed_jobs:
                     job_id = self._extract_job_id(job, platform)
-                    self.db.query(ScrapedJob).filter(
-                        ScrapedJob.job_run_id == job_run.id,
-                        ScrapedJob.job_id == job_id
-                    ).update({"sent_to_clay": True})
+                    try:
+                        # Only update if job exists in current run
+                        updated = self.db.query(ScrapedJob).filter(
+                            ScrapedJob.job_run_id == job_run.id,
+                            ScrapedJob.job_id == job_id
+                        ).update({"sent_to_clay": True})
+                        
+                        if updated == 0:
+                            logger.debug(f"Job {job_id} not found in current run (likely duplicate)")
+                    except Exception as e:
+                        logger.error(f"Error updating sent status: {e}")
                 
                 self.db.commit()
+                logger.info(f"Sent {sent_count} jobs to Clay")
+            else:
+                logger.info("No jobs passed filters, nothing to send to Clay")
             
             # Mark as successful
             job_run.status = "success"
@@ -243,17 +291,31 @@ class JobScraperService:
         except Exception as e:
             logger.error(f"{platform.capitalize()} job run {job_run.id} failed: {e}", exc_info=True)
             
+            # Update job run status
             job_run.status = "failed"
-            job_run.error_message = str(e)
+            job_run.error_message = str(e)[:1000]  # Limit error message length
             job_run.completed_at = datetime.utcnow()
             
+            # Update job search status
             job_search.last_run_at = datetime.utcnow()
             job_search.last_status = "failed"
             
             self.db.commit()
             
-            raise
+            logger.error(f"Job run {job_run.id} marked as failed")
+            
+            return job_run
         
         finally:
-            await apify_service.close()
-            await clay_service.close()
+            # Always close services
+            if apify_service:
+                try:
+                    await apify_service.close()
+                except Exception as e:
+                    logger.error(f"Error closing Apify service: {e}")
+            
+            if clay_service:
+                try:
+                    await clay_service.close()
+                except Exception as e:
+                    logger.error(f"Error closing Clay service: {e}")
