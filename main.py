@@ -274,8 +274,20 @@ async def get_scheduler_status():
     return {
         "running": scheduler.scheduler.running,
         "jobs": scheduler.get_scheduled_jobs()
-    }
 
+    }
+@app.get("/api/debug/job-runs")
+async def debug_job_runs(db: Session = Depends(get_db)):
+    """View all job runs"""
+    runs = db.query(JobRun).order_by(JobRun.id.desc()).limit(20).all()
+    return [{
+        "id": r.id,
+        "status": r.status,
+        "started_at": r.started_at,
+        "completed_at": r.completed_at,
+        "jobs_found": r.jobs_found,
+        "jobs_sent": r.jobs_sent
+    } for r in runs]
 
 # ============================================================================
 # HEALTH CHECK
