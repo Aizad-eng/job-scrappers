@@ -43,12 +43,8 @@ class ApifyService:
         """
         url = f"{self.BASE_URL}/acts/{actor_id}/runs"
         
-        # Process URLs - convert string (single or comma-separated) to list
-        if isinstance(urls, str):
-            # Split by comma and strip whitespace from each URL
-            urls_list = [u.strip() for u in urls.split(',') if u.strip()]
-        else:
-            urls_list = urls
+        # Process URLs - handle all input formats and convert to proper list
+        urls_list = self._normalize_urls(urls)
         
         logger.info(f"Processing {len(urls_list)} URL(s) for {platform}")
         
@@ -95,6 +91,67 @@ class ApifyService:
             logger.error(f"Failed to start Apify actor: {e}")
             logger.error(f"Response: {e.response.text if hasattr(e, 'response') else 'No response'}")
             raise
+    
+    def _normalize_urls(self, urls: Union[str, List[str]]) -> List[str]:
+        """
+        Normalize URLs from various input formats to a clean list.
+        
+        Handles:
+        - Single URL string
+        - Comma-separated URL string
+        - List of URLs
+        - List containing comma-separated URL strings (the bug case)
+        
+        Returns:
+            List of individual URL strings, properly trimmed
+        """
+        urls_list = []
+        
+        if isinstance(urls, str):
+            # Single string - might be comma-separated
+            urls_list = self._split_comma_urls(urls)
+        elif isinstance(urls, list):
+            # List - check each element for comma-separated URLs
+            for item in urls:
+                if isinstance(item, str):
+                    # Each item might contain comma-separated URLs
+                    urls_list.extend(self._split_comma_urls(item))
+                else:
+                    urls_list.append(item)
+        else:
+            # Fallback
+            urls_list = [urls] if urls else []
+        
+        # Final cleanup - remove empty strings and whitespace
+        urls_list = [url.strip() for url in urls_list if url and url.strip()]
+        
+        logger.debug(f"Normalized {len(urls_list)} URLs from input")
+        return urls_list
+    
+    def _split_comma_urls(self, url_string: str) -> List[str]:
+        """
+        Split a string that may contain comma-separated URLs.
+        
+        Handles the tricky case where URLs contain commas in query params.
+        We split on ', http' or ',http' patterns to be safe.
+        """
+        if not url_string or not url_string.strip():
+            return []
+        
+        url_string = url_string.strip()
+        
+        # Check if this looks like multiple URLs
+        # Look for patterns like ", https://" or ", http://" or ",https://" or ",http://"
+        import re
+        
+        # Split on comma followed by optional space followed by http(s)://
+        # This pattern preserves the http(s):// in the result
+        parts = re.split(r',\s*(?=https?://)', url_string)
+        
+        # Clean up each URL
+        result = [part.strip() for part in parts if part.strip()]
+        
+        return result
     
     async def get_run_status(self, run_id: str) -> Dict:
         """
