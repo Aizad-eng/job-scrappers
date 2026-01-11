@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reports - LinkedIn Job Scraper</title>
+    <title>Analytics Dashboard - Job Scraper</title>
     <style>
         * {
             margin: 0;
@@ -14,16 +14,17 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: #f5f7fa;
-            color: #333;
+            color: #2d3748;
             line-height: 1.6;
         }
         
         .container {
-            max-width: 1400px;
+            max-width: 1600px;
             margin: 0 auto;
             padding: 20px;
         }
         
+        /* Header */
         header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -41,13 +42,22 @@
             margin-bottom: 5px;
         }
         
+        .header-right {
+            text-align: right;
+        }
+        
+        .last-updated {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+        
         .nav-buttons {
             display: flex;
             gap: 10px;
+            margin-top: 15px;
         }
         
         .btn {
-            display: inline-block;
             padding: 10px 20px;
             border: none;
             border-radius: 6px;
@@ -56,6 +66,7 @@
             font-size: 0.9em;
             font-weight: 500;
             transition: all 0.3s;
+            display: inline-block;
         }
         
         .btn-secondary {
@@ -66,8 +77,10 @@
         
         .btn-secondary:hover {
             background: rgba(255,255,255,0.3);
+            transform: translateY(-2px);
         }
         
+        /* Stats Grid */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -79,52 +92,110 @@
             background: white;
             padding: 25px;
             border-radius: 12px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             border-left: 4px solid #667eea;
+            transition: transform 0.3s, box-shadow 0.3s;
         }
         
-        .stat-card.success {
-            border-left-color: #48bb78;
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
         
-        .stat-card.warning {
-            border-left-color: #ed8936;
-        }
-        
-        .stat-card.error {
-            border-left-color: #f56565;
-        }
+        .stat-card.success { border-left-color: #48bb78; }
+        .stat-card.warning { border-left-color: #ed8936; }
+        .stat-card.error { border-left-color: #f56565; }
+        .stat-card.info { border-left-color: #4299e1; }
         
         .stat-value {
             font-size: 2.5em;
             font-weight: bold;
             margin-bottom: 5px;
+            line-height: 1;
         }
         
         .stat-value.success { color: #48bb78; }
         .stat-value.warning { color: #ed8936; }
         .stat-value.error { color: #f56565; }
         .stat-value.primary { color: #667eea; }
+        .stat-value.info { color: #4299e1; }
         
         .stat-label {
             color: #718096;
-            font-size: 0.95em;
+            font-size: 0.9em;
+            font-weight: 500;
         }
         
+        .stat-sublabel {
+            color: #a0aec0;
+            font-size: 0.8em;
+            margin-top: 5px;
+        }
+        
+        /* Card Styles */
         .card {
             background: white;
             padding: 30px;
             border-radius: 12px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             margin-bottom: 30px;
         }
         
-        .card h2 {
-            color: #2d3748;
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        
+        .card-header h2 {
+            color: #2d3748;
+            font-size: 1.5em;
             display: flex;
             align-items: center;
             gap: 10px;
+        }
+        
+        .card-icon {
+            font-size: 1.2em;
+        }
+        
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        
+        .tab {
+            padding: 12px 20px;
+            background: transparent;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-size: 0.95em;
+            font-weight: 500;
+            color: #718096;
+            transition: all 0.3s;
+        }
+        
+        .tab:hover {
+            color: #667eea;
+            background: #f7fafc;
+        }
+        
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+        
+        /* Table Styles */
+        .table-container {
+            overflow-x: auto;
         }
         
         table {
@@ -136,10 +207,11 @@
             background: #f7fafc;
             padding: 15px;
             text-align: left;
-            border-bottom: 2px solid #e2e8f0;
             font-weight: 600;
             color: #4a5568;
             font-size: 0.9em;
+            border-bottom: 2px solid #e2e8f0;
+            white-space: nowrap;
         }
         
         td {
@@ -152,12 +224,29 @@
             background: #f7fafc;
         }
         
+        tr.clickable {
+            cursor: pointer;
+        }
+        
+        tr.clickable:hover {
+            background: #edf2f7;
+        }
+        
+        /* Status Badges */
         .status-badge {
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
             padding: 5px 12px;
             border-radius: 20px;
             font-size: 0.85em;
             font-weight: 500;
+            white-space: nowrap;
+        }
+        
+        .status-badge::before {
+            content: "●";
+            font-size: 1.2em;
         }
         
         .status-success {
@@ -175,9 +264,107 @@
             color: #7c2d12;
         }
         
+        .status-timeout {
+            background: #e2e8f0;
+            color: #2d3748;
+        }
+        
+        .status-active {
+            background: #bee3f8;
+            color: #2c5282;
+        }
+        
+        .status-inactive {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+        
+        /* Platform Badge */
+        .platform-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .platform-linkedin {
+            background: #0077b5;
+            color: white;
+        }
+        
+        .platform-indeed {
+            background: #2557a7;
+            color: white;
+        }
+        
+        /* Progress Bar */
+        .progress-container {
+            margin-top: 8px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            transition: width 0.3s;
+            border-radius: 4px;
+        }
+        
+        .progress-fill.success {
+            background: linear-gradient(90deg, #48bb78, #38a169);
+        }
+        
+        .progress-fill.warning {
+            background: linear-gradient(90deg, #ed8936, #dd6b20);
+        }
+        
+        .progress-fill.danger {
+            background: linear-gradient(90deg, #f56565, #e53e3e);
+        }
+        
+        .progress-label {
+            font-size: 0.85em;
+            color: #4a5568;
+            margin-top: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        /* Metric Row */
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .metric-row:last-child {
+            border-bottom: none;
+        }
+        
+        .metric-label {
+            color: #718096;
+            font-size: 0.9em;
+        }
+        
+        .metric-value {
+            font-weight: 600;
+            color: #2d3748;
+        }
+        
+        /* Timeline */
         .timeline {
             position: relative;
-            padding-left: 30px;
+            padding-left: 40px;
         }
         
         .timeline-item {
@@ -193,56 +380,86 @@
         
         .timeline-dot {
             position: absolute;
-            left: -8px;
+            left: -9px;
             top: 0;
-            width: 14px;
-            height: 14px;
+            width: 16px;
+            height: 16px;
             border-radius: 50%;
-            background: #667eea;
             border: 3px solid white;
             box-shadow: 0 0 0 2px #e2e8f0;
         }
         
-        .timeline-dot.success {
-            background: #48bb78;
-        }
-        
-        .timeline-dot.failed {
-            background: #f56565;
-        }
+        .timeline-dot.success { background: #48bb78; }
+        .timeline-dot.failed { background: #f56565; }
+        .timeline-dot.running { background: #ed8936; }
         
         .timeline-content {
             background: #f7fafc;
             padding: 15px;
             border-radius: 8px;
+            border-left: 3px solid #e2e8f0;
+        }
+        
+        .timeline-content.success { border-left-color: #48bb78; }
+        .timeline-content.failed { border-left-color: #f56565; }
+        
+        .timeline-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 10px;
         }
         
         .timeline-time {
             font-size: 0.85em;
             color: #718096;
-            margin-bottom: 5px;
         }
         
         .timeline-title {
             font-weight: 600;
+            color: #2d3748;
             margin-bottom: 5px;
         }
         
         .timeline-details {
             font-size: 0.9em;
             color: #4a5568;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 10px;
         }
         
-        .error-message {
-            background: #fed7d7;
+        .timeline-detail {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .timeline-detail strong {
+            color: #2d3748;
+        }
+        
+        /* Error Box */
+        .error-box {
+            background: #fff5f5;
+            border: 1px solid #fc8181;
+            border-left: 4px solid #f56565;
             color: #742a2a;
-            padding: 10px;
+            padding: 15px;
             border-radius: 6px;
             margin-top: 10px;
-            font-size: 0.85em;
-            border-left: 4px solid #f56565;
+            font-size: 0.9em;
+            font-family: 'Courier New', monospace;
         }
         
+        .error-title {
+            font-weight: 600;
+            margin-bottom: 5px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto;
+        }
+        
+        /* Empty State */
         .empty-state {
             text-align: center;
             padding: 60px 20px;
@@ -252,71 +469,151 @@
         .empty-state-icon {
             font-size: 4em;
             margin-bottom: 20px;
+            opacity: 0.5;
         }
         
-        .progress-bar {
-            width: 100%;
-            height: 8px;
-            background: #e2e8f0;
-            border-radius: 4px;
-            overflow: hidden;
-            margin-top: 8px;
-        }
-        
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #667eea, #764ba2);
-            transition: width 0.3s;
-        }
-        
-        .metric-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px 0;
-            border-bottom: 1px solid #e2e8f0;
-        }
-        
-        .metric-label {
-            color: #718096;
-            font-size: 0.9em;
-        }
-        
-        .metric-value {
-            font-weight: 600;
+        .empty-state h3 {
             color: #2d3748;
+            margin-bottom: 10px;
         }
         
-        .refresh-info {
+        /* Loading State */
+        .loading {
             text-align: center;
+            padding: 40px;
             color: #718096;
-            font-size: 0.85em;
-            margin-top: 20px;
         }
         
-        .filter-tabs {
+        .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e2e8f0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Expandable Row */
+        .expandable-content {
+            display: none;
+            padding: 20px;
+            background: #f7fafc;
+            border-left: 4px solid #667eea;
+        }
+        
+        .expandable-content.show {
+            display: block;
+        }
+        
+        /* Alert Box */
+        .alert {
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: start;
+            gap: 10px;
+        }
+        
+        .alert-info {
+            background: #bee3f8;
+            color: #2c5282;
+            border-left: 4px solid #4299e1;
+        }
+        
+        .alert-warning {
+            background: #feebc8;
+            color: #7c2d12;
+            border-left: 4px solid #ed8936;
+        }
+        
+        .alert-success {
+            background: #c6f6d5;
+            color: #22543d;
+            border-left: 4px solid #48bb78;
+        }
+        
+        /* Tooltip */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+            cursor: help;
+            border-bottom: 1px dotted #718096;
+        }
+        
+        .tooltip:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 12px;
+            background: #2d3748;
+            color: white;
+            border-radius: 6px;
+            font-size: 0.85em;
+            white-space: nowrap;
+            z-index: 1000;
+            margin-bottom: 5px;
+        }
+        
+        /* Action Buttons */
+        .action-buttons {
             display: flex;
             gap: 10px;
-            margin-bottom: 20px;
             flex-wrap: wrap;
         }
         
-        .filter-tab {
+        .action-btn {
             padding: 8px 16px;
-            border: 2px solid #e2e8f0;
-            border-radius: 6px;
+            border: 1px solid #e2e8f0;
             background: white;
+            border-radius: 6px;
             cursor: pointer;
+            font-size: 0.9em;
             transition: all 0.3s;
         }
         
-        .filter-tab.active {
+        .action-btn:hover {
+            background: #f7fafc;
+            border-color: #cbd5e0;
+        }
+        
+        .action-btn.primary {
             background: #667eea;
             color: white;
             border-color: #667eea;
         }
         
-        .filter-tab:hover {
-            border-color: #667eea;
+        .action-btn.primary:hover {
+            background: #5568d3;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .header-right {
+                text-align: left;
+                margin-top: 15px;
+            }
+            
+            .table-container {
+                overflow-x: scroll;
+            }
         }
     </style>
 </head>
@@ -324,374 +621,641 @@
     <div class="container">
         <header>
             <div>
-                <h1>📊 Reports & Analytics</h1>
-                <p>Detailed insights into your job scraping operations</p>
+                <h1>📊 Analytics & Reporting Dashboard</h1>
+                <p>Comprehensive insights into your job scraping operations</p>
             </div>
-            <div class="nav-buttons">
-                <a href="/" class="btn btn-secondary">← Back to Dashboard</a>
-                <button class="btn btn-secondary" onclick="location.reload()">🔄 Refresh</button>
+            <div class="header-right">
+                <div class="last-updated">
+                    Last updated: <span id="lastUpdate">Loading...</span>
+                </div>
+                <div class="nav-buttons">
+                    <a href="/" class="btn btn-secondary">← Dashboard</a>
+                    <button class="btn btn-secondary" onclick="refreshData()">🔄 Refresh</button>
+                </div>
             </div>
         </header>
         
+        <!-- Key Metrics -->
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-value primary" id="totalRuns">0</div>
-                <div class="stat-label">Total Runs (24h)</div>
+                <div class="stat-value primary" id="totalJobs">0</div>
+                <div class="stat-label">Total Job Searches</div>
+                <div class="stat-sublabel">All configured searches</div>
             </div>
             <div class="stat-card success">
-                <div class="stat-value success" id="successRuns">0</div>
-                <div class="stat-label">Successful Runs</div>
+                <div class="stat-value success" id="activeJobs">0</div>
+                <div class="stat-label">Active & Running</div>
+                <div class="stat-sublabel">Currently scheduled</div>
             </div>
-            <div class="stat-card error">
-                <div class="stat-value error" id="failedRuns">0</div>
-                <div class="stat-label">Failed Runs</div>
+            <div class="stat-card info">
+                <div class="stat-value info" id="totalRuns24h">0</div>
+                <div class="stat-label">Runs (24h)</div>
+                <div class="stat-sublabel">Executions today</div>
+            </div>
+            <div class="stat-card success">
+                <div class="stat-value success" id="successRate">0%</div>
+                <div class="stat-label">Success Rate</div>
+                <div class="stat-sublabel">Last 24 hours</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value primary" id="totalJobsScraped">0</div>
+                <div class="stat-value primary" id="jobsScraped">0</div>
                 <div class="stat-label">Jobs Scraped</div>
+                <div class="stat-sublabel">Found in last 24h</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value primary" id="totalJobsSent">0</div>
-                <div class="stat-label">Jobs Sent to Clay</div>
+                <div class="stat-value primary" id="jobsSent">0</div>
+                <div class="stat-label">Jobs Sent</div>
+                <div class="stat-sublabel">Delivered to Clay</div>
             </div>
             <div class="stat-card warning">
-                <div class="stat-value warning" id="upcomingRuns">0</div>
+                <div class="stat-value warning" id="jobsFiltered">0</div>
+                <div class="stat-label">Jobs Filtered</div>
+                <div class="stat-sublabel">Removed by filters</div>
+            </div>
+            <div class="stat-card info">
+                <div class="stat-value info" id="upcomingRuns">0</div>
                 <div class="stat-label">Upcoming (24h)</div>
+                <div class="stat-sublabel">Scheduled runs</div>
+            </div>
+        </div>
+        
+        <!-- Alerts -->
+        <div id="alertsContainer"></div>
+        
+        <!-- Job Search Status Overview -->
+        <div class="card">
+            <div class="card-header">
+                <h2><span class="card-icon">🎯</span> Job Search Status Overview</h2>
+            </div>
+            <div class="table-container">
+                <table id="jobStatusTable">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Platform</th>
+                            <th>Status</th>
+                            <th>Last Run</th>
+                            <th>Result</th>
+                            <th>Next Run</th>
+                            <th>Success Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody id="jobStatusBody">
+                        <tr>
+                            <td colspan="7" class="loading">
+                                <div class="spinner"></div>
+                                <p>Loading job status...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
         
         <!-- Upcoming Runs -->
         <div class="card">
-            <h2>📅 Upcoming Scheduled Runs (Next 24 Hours)</h2>
+            <div class="card-header">
+                <h2><span class="card-icon">⏰</span> Upcoming Scheduled Runs (Next 24 Hours)</h2>
+            </div>
             <div id="upcomingRunsContent">
-                <div class="empty-state">
-                    <div class="empty-state-icon">⏰</div>
+                <div class="loading">
+                    <div class="spinner"></div>
                     <p>Loading upcoming runs...</p>
                 </div>
             </div>
         </div>
         
-        <!-- Recent Activity Timeline -->
+        <!-- Recent Activity -->
         <div class="card">
-            <h2>🕐 Recent Activity (Last 24 Hours)</h2>
-            <div class="filter-tabs">
-                <button class="filter-tab active" onclick="filterRuns('all')">All Runs</button>
-                <button class="filter-tab" onclick="filterRuns('success')">Success Only</button>
-                <button class="filter-tab" onclick="filterRuns('failed')">Failed Only</button>
+            <div class="card-header">
+                <h2><span class="card-icon">📋</span> Recent Activity (Last 24 Hours)</h2>
             </div>
-            <div id="timelineContent">
-                <div class="empty-state">
-                    <div class="empty-state-icon">📊</div>
-                    <p>Loading recent activity...</p>
+            
+            <div class="tabs">
+                <button class="tab active" onclick="filterActivity('all')">All Runs</button>
+                <button class="tab" onclick="filterActivity('success')">✅ Success</button>
+                <button class="tab" onclick="filterActivity('failed')">❌ Failed</button>
+                <button class="tab" onclick="filterActivity('running')">⏳ Running</button>
+            </div>
+            
+            <div id="activityTimeline">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading activity...</p>
                 </div>
             </div>
         </div>
         
         <!-- Detailed Run History -->
         <div class="card">
-            <h2>📋 Detailed Run History</h2>
-            <table id="runHistoryTable">
-                <thead>
-                    <tr>
-                        <th>Job Search</th>
-                        <th>Started At</th>
-                        <th>Duration</th>
-                        <th>Status</th>
-                        <th>Jobs Found</th>
-                        <th>Jobs Filtered</th>
-                        <th>Jobs Sent</th>
-                        <th>Success Rate</th>
-                    </tr>
-                </thead>
-                <tbody id="runHistoryBody">
-                    <tr>
-                        <td colspan="8" style="text-align: center; padding: 40px;">
-                            Loading run history...
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+            <div class="card-header">
+                <h2><span class="card-icon">📊</span> Detailed Run History</h2>
+                <div class="action-buttons">
+                    <select id="filterPlatform" onchange="filterRunHistory()" class="action-btn">
+                        <option value="all">All Platforms</option>
+                        <option value="linkedin">LinkedIn Only</option>
+                        <option value="indeed">Indeed Only</option>
+                    </select>
+                    <select id="filterStatus" onchange="filterRunHistory()" class="action-btn">
+                        <option value="all">All Status</option>
+                        <option value="success">Success</option>
+                        <option value="failed">Failed</option>
+                        <option value="running">Running</option>
+                    </select>
+                </div>
+            </div>
+            <div class="table-container">
+                <table id="runHistoryTable">
+                    <thead>
+                        <tr>
+                            <th>Job Search</th>
+                            <th>Platform</th>
+                            <th>Started</th>
+                            <th>Duration</th>
+                            <th>Status</th>
+                            <th>Found</th>
+                            <th>Filtered</th>
+                            <th>Sent</th>
+                            <th>Efficiency</th>
+                        </tr>
+                    </thead>
+                    <tbody id="runHistoryBody">
+                        <tr>
+                            <td colspan="9" class="loading">
+                                <div class="spinner"></div>
+                                <p>Loading run history...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
         
         <!-- Error Log -->
         <div class="card" id="errorLogCard" style="display: none;">
-            <h2>⚠️ Recent Errors</h2>
+            <div class="card-header">
+                <h2><span class="card-icon">⚠️</span> Error Log & Troubleshooting</h2>
+            </div>
             <div id="errorLogContent"></div>
-        </div>
-        
-        <div class="refresh-info">
-            Last updated: <span id="lastUpdate"></span> • Auto-refresh in <span id="countdown">30</span>s
         </div>
     </div>
     
     <script>
         let allRuns = [];
-        let currentFilter = 'all';
-        let countdownTimer;
-        let countdownSeconds = 30;
+        let allJobs = [];
+        let allActivity = [];
+        let scheduledJobs = [];
+        let currentActivityFilter = 'all';
         
-        // Load all data on page load
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAllData();
+            startAutoRefresh();
+        });
+        
+        // Load all data
         async function loadAllData() {
-            await Promise.all([
-                loadStats(),
-                loadUpcomingRuns(),
-                loadRecentActivity(),
-                loadRunHistory()
-            ]);
-            
-            document.getElementById('lastUpdate').textContent = new Date().toLocaleString();
-        }
-        
-        // Load statistics
-        async function loadStats() {
             try {
-                const response = await fetch('/api/job-runs?limit=100');
-                const runs = await response.json();
-                
-                // Filter last 24 hours
-                const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-                const recentRuns = runs.filter(run => new Date(run.started_at) > yesterday);
-                
-                const successRuns = recentRuns.filter(run => run.status === 'success');
-                const failedRuns = recentRuns.filter(run => run.status === 'failed');
-                
-                const totalJobsScraped = recentRuns.reduce((sum, run) => sum + run.jobs_found, 0);
-                const totalJobsSent = recentRuns.reduce((sum, run) => sum + run.jobs_sent, 0);
-                
-                document.getElementById('totalRuns').textContent = recentRuns.length;
-                document.getElementById('successRuns').textContent = successRuns.length;
-                document.getElementById('failedRuns').textContent = failedRuns.length;
-                document.getElementById('totalJobsScraped').textContent = totalJobsScraped;
-                document.getElementById('totalJobsSent').textContent = totalJobsSent;
-            } catch (error) {
-                console.error('Error loading stats:', error);
-            }
-        }
-        
-        // Load upcoming runs
-        async function loadUpcomingRuns() {
-            try {
-                const [jobsResponse, schedulerResponse] = await Promise.all([
-                    fetch('/api/job-searches?active_only=true'),
-                    fetch('/api/scheduler/status')
+                await Promise.all([
+                    loadJobSearches(),
+                    loadRunHistory(),
+                    loadScheduler(),
+                    loadRecentActivity()
                 ]);
                 
-                const jobs = await jobsResponse.json();
-                const schedulerData = await schedulerResponse.json();
-                
-                const now = new Date();
-                const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-                
-                let upcomingHTML = '';
-                let upcomingCount = 0;
-                
-                if (schedulerData.jobs && schedulerData.jobs.length > 0) {
-                    schedulerData.jobs.forEach(job => {
-                        if (job.next_run_time) {
-                            const nextRun = new Date(job.next_run_time);
-                            
-                            if (nextRun > now && nextRun < next24Hours) {
-                                upcomingCount++;
-                                const timeUntil = getTimeUntil(nextRun);
-                                
-                                upcomingHTML += `
-                                    <div class="timeline-item">
-                                        <div class="timeline-dot"></div>
-                                        <div class="timeline-content">
-                                            <div class="timeline-time">${nextRun.toLocaleString()}</div>
-                                            <div class="timeline-title">${job.name}</div>
-                                            <div class="timeline-details">⏰ Runs in ${timeUntil}</div>
-                                        </div>
-                                    </div>
-                                `;
-                            }
-                        }
-                    });
-                }
-                
-                document.getElementById('upcomingRuns').textContent = upcomingCount;
-                
-                if (upcomingHTML) {
-                    document.getElementById('upcomingRunsContent').innerHTML = 
-                        '<div class="timeline">' + upcomingHTML + '</div>';
-                } else {
-                    document.getElementById('upcomingRunsContent').innerHTML = `
-                        <div class="empty-state">
-                            <div class="empty-state-icon">📭</div>
-                            <p>No runs scheduled in the next 24 hours</p>
-                        </div>
-                    `;
-                }
+                calculateMetrics();
+                updateLastUpdated();
+                checkForIssues();
             } catch (error) {
-                console.error('Error loading upcoming runs:', error);
+                console.error('Error loading data:', error);
+                showAlert('error', 'Failed to load some data. Please refresh the page.');
             }
         }
         
-        // Load recent activity timeline
+        // Load job searches
+        async function loadJobSearches() {
+            const response = await fetch('/api/job-searches');
+            allJobs = await response.json();
+            updateJobStatusTable();
+        }
+        
+        // Load run history
+        async function loadRunHistory() {
+            const response = await fetch('/api/job-runs?limit=100');
+            allRuns = await response.json();
+            filterRunHistory();
+        }
+        
+        // Load scheduler info
+        async function loadScheduler() {
+            const response = await fetch('/api/scheduler/status');
+            const data = await response.json();
+            scheduledJobs = data.jobs || [];
+            updateUpcomingRuns();
+        }
+        
+        // Load recent activity
         async function loadRecentActivity() {
-            try {
-                const [runsResponse, jobsResponse] = await Promise.all([
-                    fetch('/api/job-runs?limit=50'),
-                    fetch('/api/job-searches')
-                ]);
-                
-                const runs = await runsResponse.json();
-                const jobs = await jobsResponse.json();
-                
-                // Create job lookup
-                const jobLookup = {};
-                jobs.forEach(job => {
-                    jobLookup[job.id] = job;
-                });
-                
-                // Filter last 24 hours
-                const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-                allRuns = runs
-                    .filter(run => new Date(run.started_at) > yesterday)
-                    .map(run => ({
+            const response = await fetch('/api/job-runs?limit=50');
+            const runs = await response.json();
+            
+            const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            allActivity = runs
+                .filter(run => new Date(run.started_at) > yesterday)
+                .map(run => {
+                    const job = allJobs.find(j => j.id === run.job_search_id);
+                    return {
                         ...run,
-                        job_name: jobLookup[run.job_search_id]?.name || 'Unknown Job'
-                    }));
+                        job_name: job?.name || 'Unknown',
+                        platform: job?.platform || 'linkedin'
+                    };
+                });
+            
+            filterActivity(currentActivityFilter);
+        }
+        
+        // Calculate metrics
+        function calculateMetrics() {
+            const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            const recentRuns = allRuns.filter(run => new Date(run.started_at) > yesterday);
+            
+            const successRuns = recentRuns.filter(r => r.status === 'success').length;
+            const totalRecentRuns = recentRuns.length;
+            const successRate = totalRecentRuns > 0 
+                ? Math.round((successRuns / totalRecentRuns) * 100) 
+                : 0;
+            
+            const jobsScraped = recentRuns.reduce((sum, r) => sum + r.jobs_found, 0);
+            const jobsSent = recentRuns.reduce((sum, r) => sum + r.jobs_sent, 0);
+            const jobsFiltered = recentRuns.reduce((sum, r) => sum + r.jobs_filtered, 0);
+            
+            const activeJobs = allJobs.filter(j => j.is_active).length;
+            const upcomingCount = getUpcomingRuns().length;
+            
+            document.getElementById('totalJobs').textContent = allJobs.length;
+            document.getElementById('activeJobs').textContent = activeJobs;
+            document.getElementById('totalRuns24h').textContent = totalRecentRuns;
+            document.getElementById('successRate').textContent = successRate + '%';
+            document.getElementById('jobsScraped').textContent = jobsScraped.toLocaleString();
+            document.getElementById('jobsSent').textContent = jobsSent.toLocaleString();
+            document.getElementById('jobsFiltered').textContent = jobsFiltered.toLocaleString();
+            document.getElementById('upcomingRuns').textContent = upcomingCount;
+        }
+        
+        // Update job status table
+        function updateJobStatusTable() {
+            const tbody = document.getElementById('jobStatusBody');
+            
+            if (allJobs.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="empty-state">
+                            <div class="empty-state-icon">📭</div>
+                            <h3>No Job Searches Configured</h3>
+                            <p>Create your first job search to get started</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            let html = '';
+            allJobs.forEach(job => {
+                const jobRuns = allRuns.filter(r => r.job_search_id === job.id);
+                const successCount = jobRuns.filter(r => r.status === 'success').length;
+                const successRate = jobRuns.length > 0 
+                    ? Math.round((successCount / jobRuns.length) * 100) 
+                    : 0;
                 
-                displayFilteredRuns();
-            } catch (error) {
-                console.error('Error loading recent activity:', error);
-            }
-        }
-        
-        // Filter and display runs
-        function filterRuns(filter) {
-            currentFilter = filter;
-            
-            // Update active tab
-            document.querySelectorAll('.filter-tab').forEach(tab => {
-                tab.classList.remove('active');
+                const lastRun = job.last_run_at 
+                    ? new Date(job.last_run_at).toLocaleString() 
+                    : 'Never';
+                
+                const nextRun = getNextRunTime(job.id);
+                const statusBadge = job.is_active 
+                    ? '<span class="status-badge status-active">Active</span>' 
+                    : '<span class="status-badge status-inactive">Inactive</span>';
+                
+                const lastStatus = job.last_status 
+                    ? `<span class="status-badge status-${job.last_status}">${job.last_status}</span>` 
+                    : '-';
+                
+                const platformBadge = `<span class="platform-badge platform-${job.platform || 'linkedin'}">${job.platform || 'linkedin'}</span>`;
+                
+                html += `
+                    <tr class="clickable" onclick="showJobDetails(${job.id})">
+                        <td><strong>${job.name}</strong></td>
+                        <td>${platformBadge}</td>
+                        <td>${statusBadge}</td>
+                        <td>${lastRun}</td>
+                        <td>${lastStatus}</td>
+                        <td>${nextRun}</td>
+                        <td>
+                            ${successRate}%
+                            <div class="progress-container">
+                                <div class="progress-bar">
+                                    <div class="progress-fill ${getProgressClass(successRate)}" 
+                                         style="width: ${successRate}%"></div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
             });
-            event.target.classList.add('active');
             
-            displayFilteredRuns();
+            tbody.innerHTML = html;
         }
         
-        function displayFilteredRuns() {
-            let filteredRuns = allRuns;
+        // Get upcoming runs
+        function getUpcomingRuns() {
+            const now = new Date();
+            const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
             
-            if (currentFilter === 'success') {
-                filteredRuns = allRuns.filter(run => run.status === 'success');
-            } else if (currentFilter === 'failed') {
-                filteredRuns = allRuns.filter(run => run.status === 'failed');
-            }
+            return scheduledJobs
+                .filter(job => {
+                    if (!job.next_run_time) return false;
+                    const nextRun = new Date(job.next_run_time);
+                    return nextRun > now && nextRun < next24Hours;
+                })
+                .sort((a, b) => new Date(a.next_run_time) - new Date(b.next_run_time));
+        }
+        
+        // Update upcoming runs
+        function updateUpcomingRuns() {
+            const container = document.getElementById('upcomingRunsContent');
+            const upcoming = getUpcomingRuns();
             
-            let timelineHTML = '';
-            
-            if (filteredRuns.length === 0) {
-                timelineHTML = `
+            if (upcoming.length === 0) {
+                container.innerHTML = `
                     <div class="empty-state">
-                        <div class="empty-state-icon">📭</div>
-                        <p>No ${currentFilter === 'all' ? '' : currentFilter} runs in the last 24 hours</p>
+                        <div class="empty-state-icon">😴</div>
+                        <h3>No Runs Scheduled</h3>
+                        <p>No jobs scheduled to run in the next 24 hours</p>
                     </div>
                 `;
-            } else {
-                timelineHTML = '<div class="timeline">';
+                return;
+            }
+            
+            let html = '<div class="timeline">';
+            upcoming.forEach(job => {
+                const nextRun = new Date(job.next_run_time);
+                const timeUntil = getTimeUntil(nextRun);
+                const jobData = allJobs.find(j => j.name === job.name);
+                const platform = jobData?.platform || 'linkedin';
                 
-                filteredRuns.forEach(run => {
-                    const dotClass = run.status === 'success' ? 'success' : 
-                                   run.status === 'failed' ? 'failed' : '';
-                    
-                    const duration = run.completed_at ? 
-                        getDuration(new Date(run.started_at), new Date(run.completed_at)) : 
-                        'Running...';
-                    
-                    timelineHTML += `
-                        <div class="timeline-item">
-                            <div class="timeline-dot ${dotClass}"></div>
-                            <div class="timeline-content">
-                                <div class="timeline-time">${new Date(run.started_at).toLocaleString()}</div>
-                                <div class="timeline-title">${run.job_name}</div>
-                                <div class="timeline-details">
-                                    <span class="status-badge status-${run.status}">${run.status}</span>
-                                    • Duration: ${duration}
-                                    • Found: ${run.jobs_found} jobs
-                                    • Filtered: ${run.jobs_filtered}
-                                    • Sent: ${run.jobs_sent}
+                html += `
+                    <div class="timeline-item">
+                        <div class="timeline-dot" style="background: #4299e1;"></div>
+                        <div class="timeline-content" style="border-left-color: #4299e1;">
+                            <div class="timeline-header">
+                                <div>
+                                    <div class="timeline-title">${job.name}</div>
+                                    <span class="platform-badge platform-${platform}">${platform}</span>
                                 </div>
-                                ${run.error_message ? `<div class="error-message">❌ ${run.error_message}</div>` : ''}
+                                <span class="status-badge status-active">⏰ ${timeUntil}</span>
                             </div>
+                            <div class="timeline-time">📅 ${nextRun.toLocaleString()}</div>
                         </div>
-                    `;
-                });
-                
-                timelineHTML += '</div>';
-            }
+                    </div>
+                `;
+            });
+            html += '</div>';
             
-            document.getElementById('timelineContent').innerHTML = timelineHTML;
-            
-            // Show/hide error log
-            const failedRuns = allRuns.filter(run => run.status === 'failed' && run.error_message);
-            if (failedRuns.length > 0) {
-                let errorHTML = '';
-                failedRuns.forEach(run => {
-                    errorHTML += `
-                        <div class="error-message" style="margin-bottom: 15px;">
-                            <strong>${run.job_name}</strong> - ${new Date(run.started_at).toLocaleString()}<br>
-                            ${run.error_message}
-                        </div>
-                    `;
-                });
-                document.getElementById('errorLogContent').innerHTML = errorHTML;
-                document.getElementById('errorLogCard').style.display = 'block';
-            }
+            container.innerHTML = html;
         }
         
-        // Load detailed run history
-        async function loadRunHistory() {
-            try {
-                const [runsResponse, jobsResponse] = await Promise.all([
-                    fetch('/api/job-runs?limit=50'),
-                    fetch('/api/job-searches')
-                ]);
-                
-                const runs = await runsResponse.json();
-                const jobs = await jobsResponse.json();
-                
-                const jobLookup = {};
-                jobs.forEach(job => {
-                    jobLookup[job.id] = job;
-                });
-                
-                let tableHTML = '';
-                
-                runs.forEach(run => {
-                    const duration = run.completed_at ? 
-                        getDuration(new Date(run.started_at), new Date(run.completed_at)) : 
-                        'Running...';
-                    
-                    const successRate = run.jobs_found > 0 ? 
-                        Math.round((run.jobs_sent / run.jobs_found) * 100) : 0;
-                    
-                    tableHTML += `
-                        <tr>
-                            <td><strong>${jobLookup[run.job_search_id]?.name || 'Unknown'}</strong></td>
-                            <td>${new Date(run.started_at).toLocaleString()}</td>
-                            <td>${duration}</td>
-                            <td><span class="status-badge status-${run.status}">${run.status}</span></td>
-                            <td>${run.jobs_found}</td>
-                            <td>${run.jobs_filtered}</td>
-                            <td>${run.jobs_sent}</td>
-                            <td>
-                                ${successRate}%
-                                <div class="progress-bar">
-                                    <div class="progress-fill" style="width: ${successRate}%"></div>
-                                </div>
-                            </td>
-                        </tr>
-                    `;
-                });
-                
-                document.getElementById('runHistoryBody').innerHTML = tableHTML || 
-                    '<tr><td colspan="8" style="text-align: center; padding: 40px;">No run history available</td></tr>';
-            } catch (error) {
-                console.error('Error loading run history:', error);
+        // Filter activity
+        function filterActivity(filter) {
+            currentActivityFilter = filter;
+            
+            // Update tabs
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            let filtered = allActivity;
+            if (filter !== 'all') {
+                filtered = allActivity.filter(run => run.status === filter);
             }
+            
+            displayActivity(filtered);
+        }
+        
+        // Display activity timeline
+        function displayActivity(runs) {
+            const container = document.getElementById('activityTimeline');
+            
+            if (runs.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📭</div>
+                        <h3>No Activity</h3>
+                        <p>No ${currentActivityFilter === 'all' ? '' : currentActivityFilter} runs in the last 24 hours</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '<div class="timeline">';
+            runs.forEach(run => {
+                const duration = run.completed_at 
+                    ? getDuration(new Date(run.started_at), new Date(run.completed_at))
+                    : 'Running...';
+                
+                const dotClass = run.status === 'success' ? 'success' : 
+                               run.status === 'failed' ? 'failed' : 'running';
+                
+                const efficiency = run.jobs_found > 0 
+                    ? Math.round((run.jobs_sent / run.jobs_found) * 100) 
+                    : 0;
+                
+                html += `
+                    <div class="timeline-item">
+                        <div class="timeline-dot ${dotClass}"></div>
+                        <div class="timeline-content ${run.status}">
+                            <div class="timeline-header">
+                                <div>
+                                    <div class="timeline-title">${run.job_name}</div>
+                                    <span class="platform-badge platform-${run.platform}">${run.platform}</span>
+                                </div>
+                                <span class="status-badge status-${run.status}">${run.status}</span>
+                            </div>
+                            <div class="timeline-time">📅 ${new Date(run.started_at).toLocaleString()}</div>
+                            <div class="timeline-details">
+                                <div class="timeline-detail">⏱️ Duration: <strong>${duration}</strong></div>
+                                <div class="timeline-detail">🔍 Found: <strong>${run.jobs_found}</strong></div>
+                                <div class="timeline-detail">🚫 Filtered: <strong>${run.jobs_filtered}</strong></div>
+                                <div class="timeline-detail">✅ Sent: <strong>${run.jobs_sent}</strong></div>
+                                <div class="timeline-detail">📊 Efficiency: <strong>${efficiency}%</strong></div>
+                            </div>
+                            ${run.error_message ? `
+                                <div class="error-box">
+                                    <div class="error-title">❌ Error Details:</div>
+                                    ${run.error_message}
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            
+            container.innerHTML = html;
+        }
+        
+        // Filter run history
+        function filterRunHistory() {
+            const platform = document.getElementById('filterPlatform').value;
+            const status = document.getElementById('filterStatus').value;
+            
+            let filtered = allRuns;
+            
+            if (platform !== 'all') {
+                filtered = filtered.filter(run => {
+                    const job = allJobs.find(j => j.id === run.job_search_id);
+                    return job && job.platform === platform;
+                });
+            }
+            
+            if (status !== 'all') {
+                filtered = filtered.filter(run => run.status === status);
+            }
+            
+            displayRunHistory(filtered);
+        }
+        
+        // Display run history
+        function displayRunHistory(runs) {
+            const tbody = document.getElementById('runHistoryBody');
+            
+            if (runs.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="9" class="empty-state">
+                            <div class="empty-state-icon">📭</div>
+                            <h3>No Runs Found</h3>
+                            <p>No run history matches your filters</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            let html = '';
+            runs.slice(0, 50).forEach(run => {
+                const job = allJobs.find(j => j.id === run.job_search_id);
+                const duration = run.completed_at 
+                    ? getDuration(new Date(run.started_at), new Date(run.completed_at))
+                    : 'Running...';
+                
+                const efficiency = run.jobs_found > 0 
+                    ? Math.round((run.jobs_sent / run.jobs_found) * 100) 
+                    : 0;
+                
+                const platform = job?.platform || 'linkedin';
+                
+                html += `
+                    <tr class="clickable" onclick="showRunDetails(${run.id})">
+                        <td><strong>${job?.name || 'Unknown'}</strong></td>
+                        <td><span class="platform-badge platform-${platform}">${platform}</span></td>
+                        <td>${new Date(run.started_at).toLocaleString()}</td>
+                        <td>${duration}</td>
+                        <td><span class="status-badge status-${run.status}">${run.status}</span></td>
+                        <td>${run.jobs_found}</td>
+                        <td>${run.jobs_filtered}</td>
+                        <td>${run.jobs_sent}</td>
+                        <td>
+                            ${efficiency}%
+                            <div class="progress-container">
+                                <div class="progress-bar">
+                                    <div class="progress-fill ${getProgressClass(efficiency)}" 
+                                         style="width: ${efficiency}%"></div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            tbody.innerHTML = html;
+        }
+        
+        // Check for issues and show alerts
+        function checkForIssues() {
+            const alertsContainer = document.getElementById('alertsContainer');
+            let alerts = '';
+            
+            // Check for failed runs in last 24h
+            const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            const recentFailed = allRuns.filter(r => 
+                r.status === 'failed' && new Date(r.started_at) > yesterday
+            );
+            
+            if (recentFailed.length > 0) {
+                alerts += `
+                    <div class="alert alert-warning">
+                        <span style="font-size: 1.5em;">⚠️</span>
+                        <div>
+                            <strong>Warning:</strong> ${recentFailed.length} job(s) failed in the last 24 hours. 
+                            Check the error log below for details.
+                        </div>
+                    </div>
+                `;
+                
+                // Show error log
+                document.getElementById('errorLogCard').style.display = 'block';
+                showErrorLog(recentFailed);
+            }
+            
+            // Check for inactive jobs
+            const inactiveJobs = allJobs.filter(j => !j.is_active);
+            if (inactiveJobs.length > 0) {
+                alerts += `
+                    <div class="alert alert-info">
+                        <span style="font-size: 1.5em;">ℹ️</span>
+                        <div>
+                            <strong>Info:</strong> ${inactiveJobs.length} job search(es) are currently inactive and not scheduled to run.
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Check for jobs that never ran
+            const neverRan = allJobs.filter(j => j.is_active && !j.last_run_at);
+            if (neverRan.length > 0) {
+                alerts += `
+                    <div class="alert alert-info">
+                        <span style="font-size: 1.5em;">🆕</span>
+                        <div>
+                            <strong>New Jobs:</strong> ${neverRan.length} active job(s) haven't run yet. They will run according to their schedule.
+                        </div>
+                    </div>
+                `;
+            }
+            
+            alertsContainer.innerHTML = alerts;
+        }
+        
+        // Show error log
+        function showErrorLog(failedRuns) {
+            const container = document.getElementById('errorLogContent');
+            let html = '';
+            
+            failedRuns.forEach(run => {
+                const job = allJobs.find(j => j.id === run.job_search_id);
+                html += `
+                    <div class="error-box" style="margin-bottom: 15px;">
+                        <div class="error-title">
+                            ❌ ${job?.name || 'Unknown'} - ${new Date(run.started_at).toLocaleString()}
+                        </div>
+                        <div style="margin-top: 10px;">
+                            <strong>Platform:</strong> ${job?.platform || 'linkedin'}<br>
+                            <strong>Error:</strong> ${run.error_message || 'No error message available'}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
         }
         
         // Utility functions
@@ -708,32 +1272,63 @@
             const minutes = Math.floor((diff % 3600000) / 60000);
             
             if (hours > 0) {
-                return `${hours}h ${minutes}m`;
+                return `in ${hours}h ${minutes}m`;
             }
-            return `${minutes}m`;
+            return `in ${minutes}m`;
         }
         
-        // Auto-refresh countdown
-        function startCountdown() {
-            countdownSeconds = 30;
-            document.getElementById('countdown').textContent = countdownSeconds;
+        function getNextRunTime(jobId) {
+            const scheduled = scheduledJobs.find(j => {
+                const job = allJobs.find(aj => aj.id === jobId);
+                return job && j.name === job.name;
+            });
             
-            if (countdownTimer) clearInterval(countdownTimer);
+            if (scheduled && scheduled.next_run_time) {
+                const nextRun = new Date(scheduled.next_run_time);
+                return getTimeUntil(nextRun);
+            }
             
-            countdownTimer = setInterval(() => {
-                countdownSeconds--;
-                document.getElementById('countdown').textContent = countdownSeconds;
-                
-                if (countdownSeconds <= 0) {
-                    loadAllData();
-                    startCountdown();
-                }
-            }, 1000);
+            return '-';
         }
         
-        // Initialize
-        loadAllData();
-        startCountdown();
+        function getProgressClass(value) {
+            if (value >= 70) return 'success';
+            if (value >= 40) return 'warning';
+            return 'danger';
+        }
+        
+        function updateLastUpdated() {
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleString();
+        }
+        
+        function showAlert(type, message) {
+            const alertsContainer = document.getElementById('alertsContainer');
+            alertsContainer.innerHTML = `
+                <div class="alert alert-${type}">
+                    <span style="font-size: 1.5em;">${type === 'error' ? '❌' : 'ℹ️'}</span>
+                    <div>${message}</div>
+                </div>
+            `;
+        }
+        
+        function refreshData() {
+            location.reload();
+        }
+        
+        function showJobDetails(jobId) {
+            window.location.href = `/?job=${jobId}`;
+        }
+        
+        function showRunDetails(runId) {
+            alert(`Detailed view for run #${runId} - Coming soon!`);
+        }
+        
+        // Auto-refresh every 60 seconds
+        function startAutoRefresh() {
+            setInterval(() => {
+                loadAllData();
+            }, 60000);
+        }
     </script>
 </body>
 </html>
