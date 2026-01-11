@@ -66,7 +66,12 @@ class ApifyService:
         params = {"token": self.api_token}
         
         try:
+            logger.info(f"Sending payload to Apify: {payload}")
             response = await self.client.post(url, params=params, json=payload)
+            
+            if response.status_code != 201:
+                logger.error(f"Apify error response: {response.text}")
+            
             response.raise_for_status()
             result = response.json()
             
@@ -74,6 +79,7 @@ class ApifyService:
             return result["data"]
         except httpx.HTTPError as e:
             logger.error(f"Failed to start Apify actor: {e}")
+            logger.error(f"Response: {e.response.text if hasattr(e, 'response') else 'No response'}")
             raise
     
     async def get_run_status(self, run_id: str) -> Dict:
