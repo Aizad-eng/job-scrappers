@@ -43,6 +43,11 @@ class ApifyService:
         """
         url = f"{self.BASE_URL}/acts/{actor_id}/runs"
         
+        # Validate count (Apify requires minimum 100 for LinkedIn)
+        if platform == "linkedin" and count < 100:
+            logger.warning(f"Count {count} is too low for LinkedIn, using minimum 100")
+            count = 100
+        
         # Build payload based on platform
         if platform == "indeed":
             payload = {
