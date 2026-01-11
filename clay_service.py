@@ -1,5 +1,6 @@
 import httpx
 import asyncio
+import re
 from typing import Dict, List
 from tenacity import retry, stop_after_attempt, wait_exponential
 import logging
@@ -21,8 +22,28 @@ class ClayWebhookService:
         self.batch_interval_seconds = batch_interval_ms / 1000.0
         self.client = httpx.AsyncClient(timeout=30.0)
     
-    def _prepare_job_payload(self, job: Dict, keyword: str, url_scraped: str) -> Dict:
-        """Transform job data to Clay webhook format"""
+    def _clean_html(self, text: str, max_length: int = 8000) -> str:
+        """Clean HTML and truncate text"""
+        if not text:
+            return ""
+        
+        # Remove HTML tags and decode entities
+        cleaned = re.sub(r'<[^>]+>', '', text)
+        cleaned = cleaned.replace('&amp;', '&')
+        cleaned = cleaned.replace('&lt;', '<')
+        cleaned = cleaned.replace('&gt;', '>')
+        cleaned = cleaned.replace('&quot;', '"')
+        cleaned = cleaned.replace('&#039;', "'")
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+        
+        # Truncate if needed
+        if len(cleaned) > max_length:
+            cleaned = cleaned[:max_length].rsplit(' ', 1)[0] + '...'
+        
+        return cleaned
+    
+    def _prepare_linkedin_payload(self, job: Dict, keyword: str, url_scraped: str) -> Dict:
+        """Transform LinkedIn job data to Clay webhook format"""
         # Clean URLs (remove query parameters)
         linkedin_url = job.get("companyLinkedinUrl", "")
         if linkedin_url and "?" in linkedin_url:
@@ -47,10 +68,81 @@ class ClayWebhookService:
             "Posted at": job.get("postedAt", ""),
             "Job Description": job.get("descriptionText", ""),
             "keyword": keyword,
-            "url_scrapped": url_scraped
+            "url_scrapped": url_scraped,
+            "platform": "linkedin"
         }
         
         return payload
+    
+    def _prepare_indeed_payload(self, job: Dict, keyword: str, url_scraped: str) -> Dict:
+        """Transform Indeed job data to Clay webhook format"""
+        # Extract company details
+        company_details = job.get("companyDetails", {})
+        about_section = company_details.get("aboutSectionViewModel", {})
+        about_company = about_section.get("aboutCompany", {})
+        
+        # Get location
+        location = job.get("formattedLocation", "")
+        
+        # Get company address
+        hq_location = about_company.get("headquartersLocation", {})
+        company_address = hq_location.get("address", "")
+        
+        # Get website URL
+        website_info = about_company.get("websiteUrl", {})
+        company_website = website_info.get("url", "") if isinstance(website_info, dict) else ""
+        
+        # Get and clean job description
+        job_description = self._clean_html(job.get("jobDescription", ""))
+        
+        # Get salary info
+        salary_snippet = job.get("salarySnippet", {})
+        salary_text = salary_snippet.get("text", "") if salary_snippet else ""
+        currency = salary_snippet.get("currency", "") if salary_snippet else ""
+        
+        # Format pub date
+        pub_date = job.get("pubDate", "")
+        if pub_date:
+            try:
+                # Handle both timestamp formats
+                if isinstance(pub_date, (int, float)):
+                    if len(str(int(pub_date))) == 10:
+                        pub_date = pub_date * 1000
+                    from datetime import datetime
+                    pub_date = datetime.fromtimestamp(pub_date / 1000).strftime('%Y-%m-%d')
+            except:
+                pub_date = str(pub_date)
+        
+        payload = {
+            "Company name": job.get("company", ""),
+            "Job Title": job.get("displayTitle", ""),
+            "Company website": company_website,
+            "Apply URL": job.get("thirdPartyApplyUrl", ""),
+            "Industry": about_company.get("industry", ""),
+            "Job Description": job_description,
+            "Location": location,
+            "Employee Range": about_company.get("employeeRange", ""),
+            "Company description": about_company.get("description", ""),
+            "Company Address": company_address,
+            "Posted at": pub_date,
+            "Date Scrapped": "",  # Will be filled by current date
+            "Salary": salary_text,
+            "Currency": currency,
+            "Input Search URL": url_scraped,
+            "NEW JOB": job.get("newJob", False),
+            "keyword": keyword,
+            "url_scrapped": url_scraped,
+            "platform": "indeed"
+        }
+        
+        return payload
+    
+    def _prepare_job_payload(self, job: Dict, keyword: str, url_scraped: str, platform: str) -> Dict:
+        """Transform job data based on platform"""
+        if platform == "indeed":
+            return self._prepare_indeed_payload(job, keyword, url_scraped)
+        else:  # linkedin (default)
+            return self._prepare_linkedin_payload(job, keyword, url_scraped)
     
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
     async def _send_single_job(self, job_data: Dict) -> bool:
@@ -70,16 +162,17 @@ class ClayWebhookService:
         self,
         jobs: List[Dict],
         keyword: str,
-        url_scraped: str
+        url_scraped: str,
+        platform: str = "linkedin"
     ) -> int:
         """
         Send jobs to Clay webhook ONE BY ONE in batches
         
-        Example: 8 jobs per batch, 2 second wait between batches
-        - Batch 1: Send 8 jobs individually (with small delays)
-        - Wait 2 seconds
-        - Batch 2: Send next 8 jobs individually
-        - And so on...
+        Args:
+            jobs: List of job dictionaries
+            keyword: Search keyword
+            url_scraped: Original search URL
+            platform: 'linkedin' or 'indeed'
         
         Returns:
             Number of jobs successfully sent
@@ -90,7 +183,7 @@ class ClayWebhookService:
         
         # Prepare all payloads
         payloads = [
-            self._prepare_job_payload(job, keyword, url_scraped)
+            self._prepare_job_payload(job, keyword, url_scraped, platform)
             for job in jobs
         ]
         
@@ -100,7 +193,7 @@ class ClayWebhookService:
             for i in range(0, len(payloads), self.batch_size)
         ]
         
-        logger.info(f"Sending {len(payloads)} jobs in {len(batches)} batches to Clay")
+        logger.info(f"Sending {len(payloads)} {platform} jobs in {len(batches)} batches to Clay")
         
         sent_count = 0
         
@@ -125,7 +218,7 @@ class ClayWebhookService:
                 logger.info(f"Waiting {self.batch_interval_seconds}s before next batch...")
                 await asyncio.sleep(self.batch_interval_seconds)
         
-        logger.info(f"Sent {sent_count}/{len(payloads)} jobs to Clay")
+        logger.info(f"Sent {sent_count}/{len(payloads)} {platform} jobs to Clay")
         return sent_count
     
     async def close(self):
