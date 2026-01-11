@@ -21,7 +21,6 @@ class JobScraperService:
     def _extract_job_id(self, job: Dict, platform: str) -> str:
         """Extract job ID based on platform"""
         if platform == "indeed":
-            # Indeed might not have a direct ID field, create one from URL or other unique field
             return str(job.get("id", job.get("jobKey", "")))
         else:  # linkedin
             return str(job.get("id", ""))
@@ -32,7 +31,6 @@ class JobScraperService:
             company_details = job.get("companyDetails", {})
             about_section = company_details.get("aboutSectionViewModel", {})
             about_company = about_section.get("aboutCompany", {})
-            hq_location = about_company.get("headquartersLocation", {})
             website_info = about_company.get("websiteUrl", {})
             salary_snippet = job.get("salarySnippet", {})
             
@@ -78,18 +76,8 @@ class JobScraperService:
     
     async def execute_job_search(self, job_search_id: int) -> JobRun:
         """
-        Execute a complete job search workflow for LinkedIn or Indeed:
-        1. Start Apify actor
-        2. Wait for completion
-        3. Fetch results
-        4. Filter jobs
-        5. Send to Clay
-        6. Save to database
-        
-        Returns:
-            JobRun instance with execution results
+        Execute a complete job search workflow for LinkedIn or Indeed
         """
-        # Get job search configuration
         job_search = self.db.query(JobSearch).filter(JobSearch.id == job_search_id).first()
         
         if not job_search:
@@ -111,9 +99,8 @@ class JobScraperService:
         self.db.commit()
         self.db.refresh(job_run)
         
-        logger.info(f"Created job run {job_run.id} for {platform} job search '{job_search.name}'")
+        logger.info(f"Created job run {job_run.id}")
         
-        # Initialize services
         apify_service = None
         clay_service = None
         
@@ -131,7 +118,7 @@ class JobScraperService:
             )
             
             # Step 1: Start Apify actor
-            logger.info(f"Starting {platform} Apify actor for URL: {job_search.search_url}")
+            logger.info(f"Starting {platform} Apify actor")
             run_data = await apify_service.start_actor_run(
                 actor_id=job_search.apify_actor_id,
                 platform=platform,
@@ -149,17 +136,17 @@ class JobScraperService:
             logger.info(f"Apify run started: {run_data['id']}")
             
             # Step 2: Wait for completion
-            logger.info(f"Waiting for {platform} Apify run {run_data['id']} to complete")
+            logger.info(f"Waiting for Apify run to complete")
             final_status = await apify_service.wait_for_completion(run_data["id"])
-            
-            logger.info(f"Apify run completed with status: {final_status['status']}")
             
             if final_status["status"] != "SUCCEEDED":
                 raise Exception(f"Apify run failed with status: {final_status['status']}")
             
+            logger.info("Apify run completed successfully")
+            
             # Step 3: Fetch results
             dataset_id = final_status.get("defaultDatasetId") or job_run.apify_dataset_id
-            logger.info(f"Fetching {platform} data from dataset {dataset_id}")
+            logger.info(f"Fetching data from dataset {dataset_id}")
             jobs = await apify_service.get_dataset_items(dataset_id)
             
             job_run.jobs_found = len(jobs)
@@ -168,7 +155,7 @@ class JobScraperService:
             logger.info(f"Found {len(jobs)} jobs")
             
             if not jobs:
-                logger.warning(f"No {platform} jobs found in dataset")
+                logger.info("No jobs found, marking as success")
                 job_run.status = "success"
                 job_run.completed_at = datetime.utcnow()
                 job_search.last_run_at = datetime.utcnow()
@@ -177,7 +164,7 @@ class JobScraperService:
                 return job_run
             
             # Step 4: Filter jobs
-            logger.info(f"Filtering {len(jobs)} {platform} jobs")
+            logger.info(f"Filtering {len(jobs)} jobs")
             job_filter = JobFilter(
                 platform=platform,
                 company_name_excludes=job_search.company_name_excludes or [],
@@ -191,12 +178,13 @@ class JobScraperService:
             job_run.jobs_filtered = len(filtered_jobs)
             self.db.commit()
             
-            logger.info(f"Filter results: {len(passed_jobs)} passed, {len(filtered_jobs)} filtered")
+            logger.info(f"Filtered: {len(passed_jobs)} passed, {len(filtered_jobs)} filtered out")
             
-            # Save all jobs to database (skip duplicates)
+            # Step 5: Save jobs to database (skip duplicates)
             saved_count = 0
             duplicate_count = 0
             
+            logger.info("Saving jobs to database...")
             for job in jobs:
                 should_filter = job in filtered_jobs
                 filter_reason = job.get("filter_reason") if should_filter else None
@@ -212,7 +200,6 @@ class JobScraperService:
                     
                     if existing:
                         duplicate_count += 1
-                        logger.debug(f"Skipping duplicate job: {job_id}")
                         continue
                     
                     # Save new job
@@ -225,22 +212,22 @@ class JobScraperService:
                     self.db.add(scraped_job)
                     saved_count += 1
                     
-                    # Commit in batches of 100 to avoid huge transactions
+                    # Commit in batches
                     if saved_count % 100 == 0:
                         self.db.commit()
-                        logger.debug(f"Committed batch of 100 jobs (total: {saved_count})")
+                        logger.info(f"Saved {saved_count} jobs so far...")
                     
                 except Exception as e:
-                    logger.error(f"Error saving job to database: {e}")
+                    logger.error(f"Error saving job: {e}")
                     continue
             
             # Final commit
             self.db.commit()
-            logger.info(f"Saved {saved_count} new jobs to database ({duplicate_count} duplicates skipped)")
+            logger.info(f"Saved {saved_count} new jobs ({duplicate_count} duplicates skipped)")
             
-            # Step 5: Send to Clay
+            # Step 6: Send to Clay (send ALL passed jobs, including duplicates)
             if passed_jobs:
-                logger.info(f"Sending {len(passed_jobs)} {platform} jobs to Clay")
+                logger.info(f"Sending {len(passed_jobs)} jobs to Clay")
                 sent_count = await clay_service.send_jobs(
                     jobs=passed_jobs,
                     keyword=job_search.keyword,
@@ -249,39 +236,39 @@ class JobScraperService:
                 )
                 
                 job_run.jobs_sent = sent_count
+                self.db.commit()
                 
-                # Update sent status in database (only for new jobs)
+                logger.info(f"Successfully sent {sent_count} jobs to Clay")
+                
+                # Update sent status (only for jobs in this run)
                 for job in passed_jobs:
                     job_id = self._extract_job_id(job, platform)
                     try:
-                        # Only update if job exists in current run
-                        updated = self.db.query(ScrapedJob).filter(
+                        self.db.query(ScrapedJob).filter(
                             ScrapedJob.job_run_id == job_run.id,
                             ScrapedJob.job_id == job_id
                         ).update({"sent_to_clay": True})
-                        
-                        if updated == 0:
-                            logger.debug(f"Job {job_id} not found in current run (likely duplicate)")
                     except Exception as e:
-                        logger.error(f"Error updating sent status: {e}")
+                        pass  # Ignore errors for duplicates
                 
                 self.db.commit()
-                logger.info(f"Sent {sent_count} jobs to Clay")
             else:
-                logger.info("No jobs passed filters, nothing to send to Clay")
+                logger.info("No jobs passed filters")
+                job_run.jobs_sent = 0
+                self.db.commit()
             
             # Mark as successful
+            logger.info("Marking job run as successful")
             job_run.status = "success"
             job_run.completed_at = datetime.utcnow()
             
-            # Update job search
             job_search.last_run_at = datetime.utcnow()
             job_search.last_status = "success"
             
             self.db.commit()
             
             logger.info(
-                f"{platform.capitalize()} job run {job_run.id} completed successfully: "
+                f"Job run {job_run.id} completed: "
                 f"{job_run.jobs_found} found, {job_run.jobs_filtered} filtered, "
                 f"{job_run.jobs_sent} sent to Clay"
             )
@@ -289,20 +276,30 @@ class JobScraperService:
             return job_run
         
         except Exception as e:
-            logger.error(f"{platform.capitalize()} job run {job_run.id} failed: {e}", exc_info=True)
+            logger.error(f"Job run {job_run.id} failed: {e}", exc_info=True)
             
-            # Update job run status
-            job_run.status = "failed"
-            job_run.error_message = str(e)[:1000]  # Limit error message length
-            job_run.completed_at = datetime.utcnow()
-            
-            # Update job search status
-            job_search.last_run_at = datetime.utcnow()
-            job_search.last_status = "failed"
-            
-            self.db.commit()
-            
-            logger.error(f"Job run {job_run.id} marked as failed")
+            # CRITICAL: Always update status even on failure
+            try:
+                job_run.status = "failed"
+                job_run.error_message = str(e)[:1000]
+                job_run.completed_at = datetime.utcnow()
+                
+                job_search.last_run_at = datetime.utcnow()
+                job_search.last_status = "failed"
+                
+                self.db.commit()
+                logger.info(f"Job run {job_run.id} marked as failed")
+            except Exception as commit_error:
+                logger.error(f"Failed to update job status: {commit_error}")
+                # Try to rollback and commit again
+                try:
+                    self.db.rollback()
+                    job_run.status = "failed"
+                    job_run.error_message = str(e)[:500]
+                    job_run.completed_at = datetime.utcnow()
+                    self.db.commit()
+                except:
+                    logger.error("Could not update job status at all")
             
             return job_run
         
