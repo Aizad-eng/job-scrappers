@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Scraper v2.0 - Config-Driven</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .loading { opacity: 0.5; pointer-events: none; }
+        .status-completed { color: #10b981; }
+        .status-failed { color: #ef4444; }
+        .status-running { color: #f59e0b; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-800">Job Scraper v2.0</h1>
+            <p class="text-gray-600 mt-2">Config-driven scraping. Add new actors via config, not code.</p>
+        </div>
+
+        <!-- Create New Search -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4">Create New Job Search</h2>
+            
+            <form id="createForm" class="space-y-4">
+                <!-- Basic Info Row -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Search Name *</label>
+                        <input type="text" name="name" required
+                               class="w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                               placeholder="My Job Search">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Actor/Platform *</label>
+                        <select name="actor_key" id="actorSelect" required
+                                class="w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500">
+                            <option value="">Select an actor...</option>
+                            {% for actor in actors %}
+                            <option value="{{ actor.actor_key }}" 
+                                    data-schema='{{ actor.input_schema | tojson }}'
+                                    data-filters='{{ actor.filter_config | tojson }}'>
+                                {{ actor.display_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Schedule</label>
+                        <select name="cron_schedule" class="w-full border rounded-md px-3 py-2">
+                            <option value="0 */6 * * *">Every 6 hours</option>
+                            <option value="0 */12 * * *">Every 12 hours</option>
+                            <option value="0 9 * * *">Daily at 9 AM</option>
+                            <option value="0 9 * * 1-5">Weekdays at 9 AM</option>
+                            <option value="0 9 * * 1">Weekly on Monday</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Dynamic Actor Inputs -->
+                <div id="actorInputs" class="border rounded-md p-4 bg-gray-50">
+                    <p class="text-gray-500 text-sm">Select an actor to see its input fields</p>
+                </div>
+
+                <!-- Filter Rules -->
+                <div id="filterRules" class="border rounded-md p-4 bg-gray-50 hidden">
+                    <h3 class="font-medium text-gray-700 mb-3">Filter Rules</h3>
+                    <div id="filterInputs" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    </div>
+                </div>
+
+                <!-- Output Configuration -->
+                <div class="border rounded-md p-4 bg-gray-50">
+                    <h3 class="font-medium text-gray-700 mb-3">Output Configuration</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Clay Webhook URL *</label>
+                            <input type="url" name="clay_webhook_url" required
+                                   class="w-full border rounded-md px-3 py-2"
+                                   placeholder="https://api.clay.com/v1/webhooks/...">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Batch Size</label>
+                                <input type="number" name="batch_size" value="8" min="1" max="50"
+                                       class="w-full border rounded-md px-3 py-2">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Interval (ms)</label>
+                                <input type="number" name="batch_interval_ms" value="2000" min="100"
+                                       class="w-full border rounded-md px-3 py-2">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit -->
+                <div class="flex justify-end gap-3">
+                    <button type="submit" 
+                            class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition">
+                        Create Job Search
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Existing Searches -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4">Job Searches</h2>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full" id="searchesTable">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">Name</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">Platform</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">Schedule</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">Last Run</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">Status</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y">
+                        {% for search in searches %}
+                        <tr class="hover:bg-gray-50" data-id="{{ search.id }}">
+                            <td class="px-4 py-3">
+                                <span class="font-medium">{{ search.name }}</span>
+                                {% if not search.is_active %}
+                                <span class="ml-2 text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-sm text-gray-600">{{ search.actor_display_name or search.actor_key }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600">{{ search.cron_schedule }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600">
+                                {{ search.last_run_at.strftime('%Y-%m-%d %H:%M') if search.last_run_at else 'Never' }}
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="status-{{ search.last_status or 'none' }} text-sm">
+                                    {{ search.last_status or '-' }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex gap-2">
+                                    <button onclick="runSearch({{ search.id }})" 
+                                            class="text-green-600 hover:text-green-800 text-sm font-medium">
+                                        Run
+                                    </button>
+                                    <button onclick="viewRuns({{ search.id }})"
+                                            class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                        History
+                                    </button>
+                                    <button onclick="duplicateSearch({{ search.id }})"
+                                            class="text-purple-600 hover:text-purple-800 text-sm font-medium">
+                                        Duplicate
+                                    </button>
+                                    <button onclick="deleteSearch({{ search.id }}, '{{ search.name }}')"
+                                            class="text-red-600 hover:text-red-800 text-sm font-medium">
+                                        Delete
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="px-4 py-8 text-center text-gray-500">
+                                No job searches yet. Create one above!
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Run History Modal -->
+        <div id="historyModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+            <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] overflow-hidden">
+                <div class="p-4 border-b flex justify-between items-center">
+                    <h3 class="text-lg font-semibold">Run History</h3>
+                    <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">&times;</button>
+                </div>
+                <div id="historyContent" class="p-4 overflow-y-auto max-h-[60vh]">
+                    Loading...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // =================================================================
+        // DYNAMIC FORM GENERATION
+        // =================================================================
+        
+        const actorSelect = document.getElementById('actorSelect');
+        const actorInputs = document.getElementById('actorInputs');
+        const filterRules = document.getElementById('filterRules');
+        const filterInputs = document.getElementById('filterInputs');
+        
+        actorSelect.addEventListener('change', function() {
+            const option = this.options[this.selectedIndex];
+            
+            if (!option.value) {
+                actorInputs.innerHTML = '<p class="text-gray-500 text-sm">Select an actor to see its input fields</p>';
+                filterRules.classList.add('hidden');
+                return;
+            }
+            
+            const schema = JSON.parse(option.dataset.schema || '[]');
+            const filters = JSON.parse(option.dataset.filters || '{}');
+            
+            // Generate input fields
+            actorInputs.innerHTML = '<h3 class="font-medium text-gray-700 mb-3">Actor Inputs</h3>' +
+                '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
+                schema.map(field => generateInputField(field)).join('') +
+                '</div>';
+            
+            // Generate filter fields
+            if (Object.keys(filters).length > 0) {
+                filterRules.classList.remove('hidden');
+                filterInputs.innerHTML = Object.entries(filters).map(([key, config]) => 
+                    generateFilterField(key, config)
+                ).join('');
+            } else {
+                filterRules.classList.add('hidden');
+            }
+        });
+        
+        function generateInputField(field) {
+            const id = `actor_${field.name}`;
+            const required = field.required ? 'required' : '';
+            const placeholder = field.placeholder || '';
+            const help = field.help ? `<p class="text-xs text-gray-500 mt-1">${field.help}</p>` : '';
+            
+            let input = '';
+            
+            switch (field.type) {
+                case 'textarea':
+                    input = `<textarea name="${id}" ${required} rows="3"
+                              class="w-full border rounded-md px-3 py-2 text-sm"
+                              placeholder="${placeholder}">${field.default || ''}</textarea>`;
+                    break;
+                    
+                case 'select':
+                    const options = (field.options || []).map(opt => 
+                        `<option value="${opt.value}" ${opt.value === field.default ? 'selected' : ''}>${opt.label}</option>`
+                    ).join('');
+                    input = `<select name="${id}" ${required} class="w-full border rounded-md px-3 py-2">
+                              ${options}
+                            </select>`;
+                    break;
+                    
+                case 'boolean':
+                    const checked = field.default ? 'checked' : '';
+                    input = `<input type="checkbox" name="${id}" ${checked} class="h-4 w-4">`;
+                    break;
+                    
+                case 'number':
+                    input = `<input type="number" name="${id}" value="${field.default || ''}" ${required}
+                              class="w-full border rounded-md px-3 py-2">`;
+                    break;
+                    
+                default:  // text, url
+                    input = `<input type="${field.type === 'url' ? 'url' : 'text'}" name="${id}" 
+                              value="${field.default || ''}" ${required}
+                              class="w-full border rounded-md px-3 py-2"
+                              placeholder="${placeholder}">`;
+            }
+            
+            return `<div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                    ${field.label} ${field.required ? '*' : ''}
+                </label>
+                ${input}
+                ${help}
+            </div>`;
+        }
+        
+        function generateFilterField(key, config) {
+            let label = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            let placeholder = '';
+            
+            if (config.type === 'exclude_contains') {
+                placeholder = 'Comma-separated values to exclude';
+            } else if (config.type === 'min_value') {
+                label = 'Min ' + label.replace('Min ', '');
+            } else if (config.type === 'max_value') {
+                label = 'Max ' + label.replace('Max ', '');
+            }
+            
+            const inputType = config.type.includes('value') ? 'number' : 'text';
+            
+            return `<div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">${label}</label>
+                <input type="${inputType}" name="filter_${key}" 
+                       class="w-full border rounded-md px-3 py-2 text-sm"
+                       placeholder="${placeholder}">
+            </div>`;
+        }
+        
+        // =================================================================
+        // FORM SUBMISSION
+        // =================================================================
+        
+        document.getElementById('createForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const actorKey = formData.get('actor_key');
+            
+            // Build actor_inputs from dynamic fields
+            const actorInputsData = {};
+            const filterRulesData = {};
+            
+            for (const [key, value] of formData.entries()) {
+                if (key.startsWith('actor_') && value) {
+                    const fieldName = key.replace('actor_', '');
+                    actorInputsData[fieldName] = value;
+                } else if (key.startsWith('filter_') && value) {
+                    const fieldName = key.replace('filter_', '');
+                    filterRulesData[fieldName] = value;
+                }
+            }
+            
+            const payload = {
+                name: formData.get('name'),
+                actor_key: actorKey,
+                cron_schedule: formData.get('cron_schedule'),
+                actor_inputs: actorInputsData,
+                filter_rules: filterRulesData,
+                clay_webhook_url: formData.get('clay_webhook_url'),
+                batch_size: parseInt(formData.get('batch_size')) || 8,
+                batch_interval_ms: parseInt(formData.get('batch_interval_ms')) || 2000
+            };
+            
+            try {
+                this.classList.add('loading');
+                
+                const response = await fetch('/api/searches', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to create search');
+                }
+                
+                location.reload();
+            } catch (error) {
+                alert('Error: ' + error.message);
+            } finally {
+                this.classList.remove('loading');
+            }
+        });
+        
+        // =================================================================
+        // ACTIONS
+        // =================================================================
+        
+        async function runSearch(id) {
+            if (!confirm('Run this search now?')) return;
+            
+            try {
+                const response = await fetch(`/api/searches/${id}/execute`, {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`Success! Found: ${result.jobs_found}, Filtered: ${result.jobs_filtered}, Sent: ${result.jobs_sent}`);
+                    location.reload();
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        async function viewRuns(id) {
+            const modal = document.getElementById('historyModal');
+            const content = document.getElementById('historyContent');
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            content.innerHTML = 'Loading...';
+            
+            try {
+                const response = await fetch(`/api/searches/${id}/runs?limit=20`);
+                const runs = await response.json();
+                
+                if (runs.length === 0) {
+                    content.innerHTML = '<p class="text-gray-500">No runs yet</p>';
+                    return;
+                }
+                
+                content.innerHTML = `
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-3 py-2 text-left text-sm">Started</th>
+                                <th class="px-3 py-2 text-left text-sm">Status</th>
+                                <th class="px-3 py-2 text-left text-sm">Found</th>
+                                <th class="px-3 py-2 text-left text-sm">Filtered</th>
+                                <th class="px-3 py-2 text-left text-sm">Sent</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y">
+                            ${runs.map(run => `
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-3 py-2 text-sm">${new Date(run.started_at).toLocaleString()}</td>
+                                    <td class="px-3 py-2 text-sm status-${run.status}">${run.status}</td>
+                                    <td class="px-3 py-2 text-sm">${run.jobs_found}</td>
+                                    <td class="px-3 py-2 text-sm">${run.jobs_filtered}</td>
+                                    <td class="px-3 py-2 text-sm">${run.jobs_sent}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } catch (error) {
+                content.innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`;
+            }
+        }
+        
+        function closeModal() {
+            const modal = document.getElementById('historyModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+        
+        async function duplicateSearch(id) {
+            try {
+                const response = await fetch(`/api/searches/${id}/duplicate`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    const error = await response.json();
+                    alert('Error: ' + error.detail);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        async function deleteSearch(id, name) {
+            if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+            
+            try {
+                const response = await fetch(`/api/searches/${id}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    const error = await response.json();
+                    alert('Error: ' + error.detail);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        // Close modal on escape
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeModal();
+        });
+    </script>
+</body>
+</html>
