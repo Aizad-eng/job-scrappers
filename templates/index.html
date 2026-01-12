@@ -438,6 +438,19 @@
         {% endfor %}
 
         // =================================================================
+        // DEBUG: Test JavaScript functionality
+        // =================================================================
+        console.log('🚀 JavaScript loaded successfully');
+        
+        window.addEventListener('load', function() {
+            console.log('📱 Page loaded, checking functions...');
+            console.log('runSearch function:', typeof runSearch);
+            console.log('viewSearchDetails function:', typeof viewSearchDetails); 
+            console.log('editSearch function:', typeof editSearch);
+            console.log('viewRuns function:', typeof viewRuns);
+        });
+
+        // =================================================================
         // SCHEDULE BUILDER (EST TIMEZONE)
         // =================================================================
         
