@@ -608,10 +608,15 @@ async def manual_push_to_clay(
         if not actor_config:
             return {"success": False, "error": f"Actor '{data.actor_key}' not found"}
         
+        # Get Apify token
+        apify_token = os.getenv("APIFY_API_TOKEN")
+        if not apify_token:
+            return {"success": False, "error": "No Apify token configured"}
+        
         # First, fetch the dataset to validate it exists and get job count
         logger.info(f"🔍 Validating dataset {data.dataset_id} for manual push")
         
-        apify_service = ApifyService()
+        apify_service = ApifyService(apify_token)
         raw_jobs = await apify_service.get_dataset_items(data.dataset_id)
         
         if not raw_jobs:

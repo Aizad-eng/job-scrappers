@@ -284,6 +284,12 @@ class ApifyService:
         dataset_info = response.json()["data"]
         return dataset_info.get("itemCount", 0)
     
+    async def get_dataset_items(self, dataset_id: str, limit: int = 10000, offset: int = 0) -> List[Dict]:
+        """Public method to get dataset items"""
+        
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            return await self._get_dataset_items(client, dataset_id, limit, offset)
+    
     async def get_run_status(self, run_id: str) -> Dict:
         """Get current status of a run"""
         
