@@ -396,11 +396,47 @@ async def get_search_runs(
     db: Session = Depends(get_db)
 ):
     """Get run history for a job search"""
-    runs = db.query(JobRun).filter(
-        JobRun.job_search_id == search_id
-    ).order_by(JobRun.started_at.desc()).limit(limit).all()
-    
-    return [JobRunResponse.model_validate(r) for r in runs]
+    try:
+        runs = db.query(JobRun).filter(
+            JobRun.job_search_id == search_id
+        ).order_by(JobRun.started_at.desc()).limit(limit).all()
+        
+        return [JobRunResponse.model_validate(r) for r in runs]
+    except Exception as e:
+        if "execution_logs does not exist" in str(e):
+            # Fallback query without execution_logs column for migration compatibility
+            from sqlalchemy import text
+            result = db.execute(text("""
+                SELECT id, job_search_id, started_at, completed_at, status,
+                       jobs_found, jobs_filtered, jobs_sent, error_message,
+                       apify_run_id, apify_dataset_id,
+                       NULL as execution_logs
+                FROM job_runs 
+                WHERE job_search_id = :search_id 
+                ORDER BY started_at DESC 
+                LIMIT :limit
+            """), {"search_id": search_id, "limit": limit})
+            
+            runs = []
+            for row in result:
+                run_dict = {
+                    "id": row[0],
+                    "job_search_id": row[1], 
+                    "started_at": row[2],
+                    "completed_at": row[3],
+                    "status": row[4] or "unknown",
+                    "jobs_found": row[5] or 0,
+                    "jobs_filtered": row[6] or 0, 
+                    "jobs_sent": row[7] or 0,
+                    "error_message": row[8],
+                    "execution_logs": None,  # Will be available after migration
+                    "apify_run_id": row[9]
+                }
+                runs.append(JobRunResponse.model_validate(run_dict))
+            
+            return runs
+        else:
+            raise
 
 
 @app.get("/api/runs/{run_id}", response_model=JobRunDetailResponse)
