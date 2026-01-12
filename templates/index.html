@@ -44,22 +44,83 @@
                             {% for actor in actors %}
                             <option value="{{ actor.actor_key }}" 
                                     data-schema='{{ actor.input_schema | tojson }}'
-                                    data-filters='{{ actor.filter_config | tojson }}'>
+                                    data-filters='{{ actor.filter_config | tojson }}'
+                                    data-schedule-type='{{ actor.schedule_type }}'>
                                 {{ actor.display_name }}
                             </option>
                             {% endfor %}
                         </select>
                     </div>
                     
-                    <div>
+                    <!-- Simple Schedule Dropdown (for Fantastic Jobs) -->
+                    <div id="simpleSchedule">
                         <label class="block text-sm font-medium text-gray-700 mb-1">Schedule</label>
-                        <select name="cron_schedule" class="w-full border rounded-md px-3 py-2">
+                        <select name="cron_schedule_simple" id="cronScheduleSimple" class="w-full border rounded-md px-3 py-2">
                             <option value="0 */6 * * *">Every 6 hours</option>
                             <option value="0 */12 * * *">Every 12 hours</option>
                             <option value="0 9 * * *">Daily at 9 AM</option>
                             <option value="0 9 * * 1-5">Weekdays at 9 AM</option>
                             <option value="0 9 * * 1">Weekly on Monday</option>
                         </select>
+                    </div>
+                    
+                    <!-- Custom Schedule (for LinkedIn/Indeed) -->
+                    <div id="customSchedule" class="hidden">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Schedule</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <select name="schedule_frequency" id="scheduleFrequency" class="border rounded-md px-3 py-2">
+                                <option value="hourly">Every X hours</option>
+                                <option value="daily">Daily</option>
+                                <option value="weekdays">Weekdays only</option>
+                                <option value="weekly">Weekly</option>
+                                <option value="custom">Custom days</option>
+                            </select>
+                            <input type="time" name="schedule_time" id="scheduleTime" value="09:00" 
+                                   class="border rounded-md px-3 py-2">
+                        </div>
+                        
+                        <!-- Hourly interval (shown when "Every X hours" selected) -->
+                        <div id="hourlyOptions" class="mt-2">
+                            <select name="hourly_interval" id="hourlyInterval" class="w-full border rounded-md px-3 py-2">
+                                <option value="1">Every 1 hour</option>
+                                <option value="2">Every 2 hours</option>
+                                <option value="3">Every 3 hours</option>
+                                <option value="4">Every 4 hours</option>
+                                <option value="6" selected>Every 6 hours</option>
+                                <option value="8">Every 8 hours</option>
+                                <option value="12">Every 12 hours</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Day selector (shown for weekly/custom) -->
+                        <div id="dayOptions" class="mt-2 hidden">
+                            <div class="flex flex-wrap gap-2">
+                                <label class="flex items-center gap-1 text-sm">
+                                    <input type="checkbox" name="day_sun" value="0"> Sun
+                                </label>
+                                <label class="flex items-center gap-1 text-sm">
+                                    <input type="checkbox" name="day_mon" value="1" checked> Mon
+                                </label>
+                                <label class="flex items-center gap-1 text-sm">
+                                    <input type="checkbox" name="day_tue" value="2"> Tue
+                                </label>
+                                <label class="flex items-center gap-1 text-sm">
+                                    <input type="checkbox" name="day_wed" value="3"> Wed
+                                </label>
+                                <label class="flex items-center gap-1 text-sm">
+                                    <input type="checkbox" name="day_thu" value="4"> Thu
+                                </label>
+                                <label class="flex items-center gap-1 text-sm">
+                                    <input type="checkbox" name="day_fri" value="5"> Fri
+                                </label>
+                                <label class="flex items-center gap-1 text-sm">
+                                    <input type="checkbox" name="day_sat" value="6"> Sat
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Preview -->
+                        <p id="schedulePreview" class="text-xs text-gray-500 mt-2"></p>
                     </div>
                 </div>
 
@@ -308,9 +369,104 @@
         actorConfigs['{{ actor.actor_key }}'] = {
             display_name: '{{ actor.display_name }}',
             input_schema: {{ actor.input_schema | tojson }},
-            filter_config: {{ actor.filter_config | tojson }}
+            filter_config: {{ actor.filter_config | tojson }},
+            schedule_type: '{{ actor.schedule_type }}'
         };
         {% endfor %}
+
+        // =================================================================
+        // SCHEDULE BUILDER
+        // =================================================================
+        
+        const simpleSchedule = document.getElementById('simpleSchedule');
+        const customSchedule = document.getElementById('customSchedule');
+        const scheduleFrequency = document.getElementById('scheduleFrequency');
+        const hourlyOptions = document.getElementById('hourlyOptions');
+        const dayOptions = document.getElementById('dayOptions');
+        const schedulePreview = document.getElementById('schedulePreview');
+        const scheduleTime = document.getElementById('scheduleTime');
+        const hourlyInterval = document.getElementById('hourlyInterval');
+        
+        function updateScheduleUI(scheduleType) {
+            if (scheduleType === 'custom') {
+                simpleSchedule.classList.add('hidden');
+                customSchedule.classList.remove('hidden');
+            } else {
+                simpleSchedule.classList.remove('hidden');
+                customSchedule.classList.add('hidden');
+            }
+        }
+        
+        function updateScheduleOptions() {
+            const freq = scheduleFrequency.value;
+            
+            if (freq === 'hourly') {
+                hourlyOptions.classList.remove('hidden');
+                dayOptions.classList.add('hidden');
+                scheduleTime.parentElement.querySelector('input[type="time"]').classList.add('hidden');
+            } else if (freq === 'weekly' || freq === 'custom') {
+                hourlyOptions.classList.add('hidden');
+                dayOptions.classList.remove('hidden');
+                scheduleTime.classList.remove('hidden');
+            } else {
+                hourlyOptions.classList.add('hidden');
+                dayOptions.classList.add('hidden');
+                scheduleTime.classList.remove('hidden');
+            }
+            
+            updateSchedulePreview();
+        }
+        
+        function buildCronExpression() {
+            const freq = scheduleFrequency.value;
+            const time = scheduleTime.value.split(':');
+            const hour = parseInt(time[0]);
+            const minute = parseInt(time[1]);
+            
+            switch (freq) {
+                case 'hourly':
+                    const interval = hourlyInterval.value;
+                    return `0 */${interval} * * *`;
+                
+                case 'daily':
+                    return `${minute} ${hour} * * *`;
+                
+                case 'weekdays':
+                    return `${minute} ${hour} * * 1-5`;
+                
+                case 'weekly':
+                case 'custom':
+                    const days = [];
+                    document.querySelectorAll('#dayOptions input:checked').forEach(cb => {
+                        days.push(cb.value);
+                    });
+                    const dayStr = days.length > 0 ? days.join(',') : '*';
+                    return `${minute} ${hour} * * ${dayStr}`;
+                
+                default:
+                    return '0 9 * * *';
+            }
+        }
+        
+        function updateSchedulePreview() {
+            const cron = buildCronExpression();
+            try {
+                schedulePreview.textContent = 'Schedule: ' + cronstrue.toString(cron);
+            } catch (e) {
+                schedulePreview.textContent = 'Cron: ' + cron;
+            }
+        }
+        
+        // Event listeners for schedule builder
+        scheduleFrequency.addEventListener('change', updateScheduleOptions);
+        scheduleTime.addEventListener('change', updateSchedulePreview);
+        hourlyInterval.addEventListener('change', updateSchedulePreview);
+        document.querySelectorAll('#dayOptions input').forEach(cb => {
+            cb.addEventListener('change', updateSchedulePreview);
+        });
+        
+        // Initialize
+        updateScheduleOptions();
 
         // =================================================================
         // NEXT RUN CALCULATION
@@ -401,11 +557,16 @@
             if (!option.value) {
                 actorInputs.innerHTML = '<p class="text-gray-500 text-sm">Select an actor to see its input fields</p>';
                 filterRules.classList.add('hidden');
+                updateScheduleUI('simple');
                 return;
             }
             
             const schema = JSON.parse(option.dataset.schema || '[]');
             const filters = JSON.parse(option.dataset.filters || '{}');
+            const scheduleType = option.dataset.scheduleType || 'simple';
+            
+            // Update schedule UI based on actor type
+            updateScheduleUI(scheduleType);
             
             // Generate input fields
             actorInputs.innerHTML = '<h3 class="font-medium text-gray-700 mb-3">Actor Inputs</h3>' +
@@ -506,6 +667,15 @@
             
             const formData = new FormData(this);
             const actorKey = formData.get('actor_key');
+            const actorConfig = actorConfigs[actorKey];
+            
+            // Determine cron schedule based on actor type
+            let cronSchedule;
+            if (actorConfig && actorConfig.schedule_type === 'custom') {
+                cronSchedule = buildCronExpression();
+            } else {
+                cronSchedule = formData.get('cron_schedule_simple');
+            }
             
             // Build actor_inputs from dynamic fields
             const actorInputsData = {};
@@ -524,7 +694,7 @@
             const payload = {
                 name: formData.get('name'),
                 actor_key: actorKey,
-                cron_schedule: formData.get('cron_schedule'),
+                cron_schedule: cronSchedule,
                 actor_inputs: actorInputsData,
                 filter_rules: filterRulesData,
                 clay_webhook_url: formData.get('clay_webhook_url'),
