@@ -54,6 +54,9 @@ class ActorConfig(Base):
     # Is this actor active/available
     is_active = Column(Boolean, default=True)
     
+    # Schedule type: "simple" (dropdown) or "custom" (date/time picker)
+    schedule_type = Column(String(20), default="simple")
+    
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
