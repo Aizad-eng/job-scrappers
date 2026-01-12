@@ -7,6 +7,26 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+    <style>
+        /* Fix chart positioning and prevent layout issues */
+        .chart-container {
+            position: relative;
+            height: 300px;
+            overflow: hidden;
+        }
+        
+        /* Ensure charts maintain proper positioning */
+        canvas {
+            position: relative !important;
+            max-width: 100% !important;
+            height: auto !important;
+        }
+        
+        /* Prevent any weird scrolling behavior */
+        body {
+            overflow-x: hidden;
+        }
+    </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
     <div class="container mx-auto px-4 py-6">
@@ -127,13 +147,17 @@
                 <!-- Daily Trends Chart -->
                 <div class="bg-white rounded-lg shadow-md p-6">
                     <h3 class="text-lg font-semibold mb-4">Daily Trends</h3>
-                    <canvas id="dailyChart" height="300"></canvas>
+                    <div class="chart-container">
+                        <canvas id="dailyChart"></canvas>
+                    </div>
                 </div>
 
                 <!-- Platform Breakdown Chart -->
                 <div class="bg-white rounded-lg shadow-md p-6">
                     <h3 class="text-lg font-semibold mb-4">Platform Performance</h3>
-                    <canvas id="platformChart" height="300"></canvas>
+                    <div class="chart-container">
+                        <canvas id="platformChart"></canvas>
+                    </div>
                 </div>
             </div>
 
@@ -192,6 +216,16 @@
             loadAnalytics();
             
             document.getElementById('applyFilters').addEventListener('click', loadAnalytics);
+            
+            // Handle window resize for charts
+            window.addEventListener('resize', function() {
+                if (dailyChart) {
+                    dailyChart.resize();
+                }
+                if (platformChart) {
+                    platformChart.resize();
+                }
+            });
         });
         
         function initializeFilters() {
@@ -330,6 +364,10 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
                     scales: {
                         y: {
                             beginAtZero: true
@@ -339,6 +377,9 @@
                         legend: {
                             position: 'top'
                         }
+                    },
+                    animation: {
+                        duration: 0 // Disable animations to prevent positioning issues
                     }
                 }
             });
@@ -400,6 +441,9 @@
                         legend: {
                             position: 'bottom'
                         }
+                    },
+                    animation: {
+                        duration: 0 // Disable animations to prevent positioning issues
                     }
                 }
             });
