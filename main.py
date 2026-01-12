@@ -184,6 +184,47 @@ async def delete_job_search(job_search_id: int, db: Session = Depends(get_db)):
     return None
 
 
+@app.post("/api/job-searches/{job_search_id}/duplicate", response_model=JobSearchResponse, status_code=201)
+async def duplicate_job_search(job_search_id: int, db: Session = Depends(get_db)):
+    """Duplicate an existing job search configuration"""
+    original = db.query(JobSearch).filter(JobSearch.id == job_search_id).first()
+    
+    if not original:
+        raise HTTPException(status_code=404, detail="Job search not found")
+    
+    # Create copy with new name
+    new_job_search = JobSearch(
+        name=f"{original.name} (Copy)",
+        keyword=original.keyword,
+        platform=original.platform,
+        search_url=original.search_url,
+        cron_schedule=original.cron_schedule,
+        apify_actor_id=original.apify_actor_id,
+        apify_token=original.apify_token,
+        max_results=original.max_results,
+        scrape_company=original.scrape_company,
+        use_browser=original.use_browser,
+        use_apify_proxy=original.use_apify_proxy,
+        company_name_excludes=original.company_name_excludes,
+        industries_excludes=original.industries_excludes,
+        max_employee_count=original.max_employee_count,
+        min_employee_count=original.min_employee_count,
+        job_description_filters=original.job_description_filters,
+        clay_webhook_url=original.clay_webhook_url,
+        batch_size=original.batch_size,
+        batch_interval_ms=original.batch_interval_ms,
+        is_active=False  # Start as inactive so user can edit first
+    )
+    
+    db.add(new_job_search)
+    db.commit()
+    db.refresh(new_job_search)
+    
+    logger.info(f"Duplicated job search '{original.name}' -> '{new_job_search.name}' (ID: {new_job_search.id})")
+    
+    return new_job_search
+
+
 # ============================================================================
 # JOB EXECUTION API
 # ============================================================================
