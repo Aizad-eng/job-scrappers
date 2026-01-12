@@ -11,7 +11,7 @@ Workflow:
 
 import logging
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from sqlalchemy.orm import Session
 
 from models import JobSearch, JobRun, ScrapedJob, ActorConfig
