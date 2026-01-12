@@ -56,18 +56,8 @@
                     <div id="scheduleContainer" class="hidden">
                         <label class="block text-sm font-medium text-gray-700 mb-1">Schedule (EST)</label>
                         
-                        <!-- Fantastic Jobs - Simple intervals -->
-                        <div id="intervalSchedule" class="hidden">
-                            <select name="interval_schedule" id="intervalSelect" class="w-full border rounded-md px-3 py-2">
-                                <option value="0 * * * *">Every 1 hour</option>
-                                <option value="0 0 * * *">Every 24 hours (daily at midnight)</option>
-                                <option value="0 0 * * 0">Every 7 days (weekly on Sunday)</option>
-                                <option value="0 0 1 */6 *">Every 6 months</option>
-                            </select>
-                        </div>
-                        
-                        <!-- LinkedIn/Indeed - Time-based scheduling -->
-                        <div id="timeSchedule" class="hidden">
+                        <!-- Unified time-based scheduling for all actors -->
+                        <div id="timeSchedule">
                             <div class="space-y-3">
                                 <div class="grid grid-cols-2 gap-2">
                                     <select name="frequency" id="frequencySelect" class="border rounded-md px-3 py-2">
@@ -358,7 +348,6 @@
         const EST_TIMEZONE = 'America/New_York';
         
         const scheduleContainer = document.getElementById('scheduleContainer');
-        const intervalSchedule = document.getElementById('intervalSchedule');
         const timeSchedule = document.getElementById('timeSchedule');
         const frequencySelect = document.getElementById('frequencySelect');
         const weeklyDaySelect = document.getElementById('weeklyDaySelect');
@@ -373,18 +362,9 @@
                 return;
             }
             
-            // Show schedule container
+            // Show schedule container with unified time-based scheduling
             scheduleContainer.classList.remove('hidden');
-            
-            // Show appropriate schedule UI based on actor
-            if (actorKey === 'fantastic_jobs') {
-                intervalSchedule.classList.remove('hidden');
-                timeSchedule.classList.add('hidden');
-            } else {
-                intervalSchedule.classList.add('hidden');
-                timeSchedule.classList.remove('hidden');
-                updateTimeSchedulePreview();
-            }
+            updateTimeSchedulePreview();
         }
         
         function updateTimeScheduleOptions() {
@@ -586,13 +566,8 @@
             const actorKey = formData.get('actor_key');
             const actorConfig = actorConfigs[actorKey];
             
-            // Determine cron schedule based on actor type
-            let cronSchedule;
-            if (actorKey === 'fantastic_jobs') {
-                cronSchedule = formData.get('interval_schedule');
-            } else {
-                cronSchedule = buildTimeBasedCron();
-            }
+            // Use unified time-based cron generation for all actors
+            const cronSchedule = buildTimeBasedCron();
             
             // Build actor_inputs from dynamic fields
             const actorInputsData = {};
