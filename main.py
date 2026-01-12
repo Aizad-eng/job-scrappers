@@ -580,6 +580,94 @@ async def push_run_to_clay(
 
 
 # =============================================================================
+# MANUAL PUSH ENDPOINT
+# =============================================================================
+
+class ManualPushRequest(BaseModel):
+    dataset_id: str = Field(..., min_length=1)
+    actor_key: str = Field(..., min_length=1) 
+    clay_webhook_url: str = Field(..., min_length=1)
+    batch_size: int = Field(default=8, ge=1, le=50)
+    batch_interval_ms: int = Field(default=2000, ge=100, le=30000)
+
+@app.post("/api/manual-push")
+async def manual_push_to_clay(
+    data: ManualPushRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """Manually push data from any Apify dataset to Clay webhook"""
+    try:
+        # Get actor config
+        actor_registry = ActorRegistry()
+        actor_config = actor_registry.get_actor(data.actor_key)
+        
+        if not actor_config:
+            return {"success": False, "error": f"Actor '{data.actor_key}' not found"}
+        
+        # Create temporary job search object for Clay service
+        class TempJobSearch:
+            def __init__(self):
+                self.clay_webhook_url = data.clay_webhook_url
+                self.batch_size = data.batch_size 
+                self.batch_interval_ms = data.batch_interval_ms
+        
+        temp_job_search = TempJobSearch()
+        
+        # Add background task to process the push
+        background_tasks.add_task(
+            process_manual_push,
+            data.dataset_id,
+            actor_config,
+            temp_job_search
+        )
+        
+        return {
+            "success": True,
+            "message": "Manual push started in background",
+            "dataset_id": data.dataset_id,
+            "actor_key": data.actor_key,
+            "batch_size": data.batch_size,
+            "batch_interval_ms": data.batch_interval_ms
+        }
+        
+    except Exception as e:
+        logger.error(f"Manual push setup failed: {e}")
+        return {"success": False, "error": str(e)}
+
+async def process_manual_push(dataset_id: str, actor_config, job_search):
+    """Background task to process manual push"""
+    try:
+        logger.info(f"🚀 Starting manual push - Dataset: {dataset_id}, Actor: {actor_config.actor_key}")
+        
+        # Fetch data from Apify dataset
+        apify_service = ApifyService()
+        raw_jobs = await apify_service.get_dataset_items(dataset_id)
+        
+        if not raw_jobs:
+            logger.warning(f"⚠️  No data found in dataset {dataset_id}")
+            return
+        
+        logger.info(f"📥 Found {len(raw_jobs)} jobs in dataset {dataset_id}")
+        
+        # Send to Clay using the same transformation logic as normal runs
+        clay_service = ClayService()
+        result = await clay_service.send_jobs(
+            jobs=raw_jobs,
+            actor_config=actor_config,
+            job_search=job_search
+        )
+        
+        logger.info(f"✅ Manual push completed - Sent: {result['sent']}, Failed: {result['failed']}")
+        
+        if result['errors']:
+            logger.error(f"❌ Manual push errors: {result['errors']}")
+        
+    except Exception as e:
+        logger.error(f"💥 Manual push failed: {e}")
+
+
+# =============================================================================
 # HEALTH CHECK & SCHEDULER STATUS
 # =============================================================================
 
