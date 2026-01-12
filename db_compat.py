@@ -4,10 +4,16 @@ Handles differences between local development and production schemas
 """
 
 from sqlalchemy import text
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, ProgrammingError, DatabaseError
 from models import JobRun
 from database import SessionLocal
 import logging
+
+# Try to import psycopg2 errors for PostgreSQL
+try:
+    import psycopg2.errors
+except ImportError:
+    psycopg2 = None
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +31,10 @@ def create_job_run_safe(db, **kwargs):
         db.refresh(job_run)
         return job_run
         
-    except OperationalError as e:
-        if "execution_logs" in str(e) or "does not exist" in str(e):
+    except Exception as e:
+        # Check if this is a column-related error
+        error_str = str(e).lower()
+        if any(term in error_str for term in ["execution_logs", "does not exist", "undefinedcolumn", "no such column"]):
             logger.warning(f"Falling back to safe JobRun creation: {e}")
             
             # Rollback the failed transaction
@@ -107,8 +115,10 @@ def update_job_run_safe(db, job_run_id, **updates):
             db.commit()
             return job_run
         
-    except OperationalError as e:
-        if "execution_logs" in str(e) or "does not exist" in str(e):
+    except Exception as e:
+        # Check if this is a column-related error
+        error_str = str(e).lower()
+        if any(term in error_str for term in ["execution_logs", "does not exist", "undefinedcolumn", "no such column"]):
             logger.warning(f"Falling back to safe JobRun update: {e}")
             
             # Rollback the failed transaction
