@@ -21,6 +21,7 @@ from filter_service import FilterService
 from clay_service import ClayService
 from template_engine import extract_fields
 from run_logger import start_run_logging, finish_run_logging
+from db_compat import create_job_run_safe, update_job_run_safe
 
 logger = logging.getLogger(__name__)
 
@@ -54,12 +55,11 @@ class ScraperService:
         actor_config = self.actor_registry.get_actor(job_search.actor_key)
         
         # Create a job run record
-        job_run = JobRun(
+        job_run = create_job_run_safe(
+            self.db,
             job_search_id=job_search.id,
             status="running"
         )
-        self.db.add(job_run)
-        self.db.commit()  # Commit to get the run ID
         
         # Start capturing logs for this run
         start_run_logging(job_run.id)
@@ -273,9 +273,12 @@ class ScraperService:
                     logger.warning(f"[STEP 4] ⚠️  Skipping Clay - no webhook URL configured")
             
             # Mark as complete
-            job_run.status = "completed"
-            job_run.completed_at = datetime.utcnow()
-            job_run.execution_logs = finish_run_logging(job_run.id)
+            execution_logs = finish_run_logging(job_run.id)
+            update_job_run_safe(self.db, job_run.id,
+                status="completed",
+                completed_at=datetime.utcnow(),
+                execution_logs=execution_logs
+            )
             
             # Update job search last run info
             job_search.last_run_at = datetime.utcnow()
@@ -313,10 +316,13 @@ class ScraperService:
             
             logger.error(f"❌ [ERROR] Failed during: {step_info}")
             
-            job_run.status = "failed"
-            job_run.error_message = f"{step_info}: {str(e)}"
-            job_run.completed_at = datetime.utcnow()
-            job_run.execution_logs = finish_run_logging(job_run.id)
+            execution_logs = finish_run_logging(job_run.id)
+            update_job_run_safe(self.db, job_run.id,
+                status="failed", 
+                error_message=f"{step_info}: {str(e)}",
+                completed_at=datetime.utcnow(),
+                execution_logs=execution_logs
+            )
             
             job_search.last_run_at = datetime.utcnow()
             job_search.last_status = "failed"
