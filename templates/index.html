@@ -1448,7 +1448,8 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    alert(`✅ Manual push started!\n\nDataset: ${payload.dataset_id}\nActor: ${payload.actor_key}\nJobs to process: ${result.jobs_found || 'Unknown'}\nBatch size: ${payload.batch_size}\nInterval: ${payload.batch_interval_ms}ms\n\nData will be sent to Clay in the background.`);
+                    const estimatedTime = result.estimated_time_minutes ? `\nEstimated time: ${result.estimated_time_minutes} minutes` : '';
+                    alert(`✅ Manual push started!\n\nDataset: ${payload.dataset_id}\nActor: ${payload.actor_key}\nJobs found: ${result.jobs_found}\nBatch size: ${payload.batch_size} jobs per batch\nInterval: ${payload.batch_interval_ms}ms between batches${estimatedTime}\n\nData is being sent to Clay in the background. Check the server logs for progress.`);
                     closeManualPushModal();
                 } else {
                     alert(`❌ Error: ${result.error || 'Unknown error occurred'}`);

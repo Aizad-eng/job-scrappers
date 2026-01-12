@@ -606,6 +606,21 @@ async def manual_push_to_clay(
         if not actor_config:
             return {"success": False, "error": f"Actor '{data.actor_key}' not found"}
         
+        # First, fetch the dataset to validate it exists and get job count
+        logger.info(f"🔍 Validating dataset {data.dataset_id} for manual push")
+        
+        apify_service = ApifyService()
+        raw_jobs = await apify_service.get_dataset_items(data.dataset_id)
+        
+        if not raw_jobs:
+            return {
+                "success": False, 
+                "error": f"No data found in dataset {data.dataset_id}. Dataset may be empty or doesn't exist."
+            }
+        
+        jobs_count = len(raw_jobs)
+        logger.info(f"📊 Found {jobs_count} jobs in dataset {data.dataset_id}")
+        
         # Create temporary job search object for Clay service
         class TempJobSearch:
             def __init__(self):
@@ -615,41 +630,48 @@ async def manual_push_to_clay(
         
         temp_job_search = TempJobSearch()
         
-        # Add background task to process the push
+        # Add background task to process the push (pass the already-fetched jobs)
         background_tasks.add_task(
             process_manual_push,
             data.dataset_id,
             actor_config,
-            temp_job_search
+            temp_job_search,
+            raw_jobs  # Pass the jobs we already fetched
         )
+        
+        estimated_time_minutes = (jobs_count * data.batch_interval_ms) / (data.batch_size * 60000)
         
         return {
             "success": True,
-            "message": "Manual push started in background",
+            "message": f"Manual push started for {jobs_count} jobs",
             "dataset_id": data.dataset_id,
             "actor_key": data.actor_key,
+            "jobs_found": jobs_count,
             "batch_size": data.batch_size,
-            "batch_interval_ms": data.batch_interval_ms
+            "batch_interval_ms": data.batch_interval_ms,
+            "estimated_time_minutes": round(estimated_time_minutes, 1)
         }
         
     except Exception as e:
         logger.error(f"Manual push setup failed: {e}")
         return {"success": False, "error": str(e)}
 
-async def process_manual_push(dataset_id: str, actor_config, job_search):
+async def process_manual_push(dataset_id: str, actor_config, job_search, raw_jobs=None):
     """Background task to process manual push"""
     try:
         logger.info(f"🚀 Starting manual push - Dataset: {dataset_id}, Actor: {actor_config.actor_key}")
         
-        # Fetch data from Apify dataset
-        apify_service = ApifyService()
-        raw_jobs = await apify_service.get_dataset_items(dataset_id)
+        # Use pre-fetched jobs if available, otherwise fetch them
+        if raw_jobs is None:
+            logger.info(f"📥 Fetching data from dataset {dataset_id}")
+            apify_service = ApifyService()
+            raw_jobs = await apify_service.get_dataset_items(dataset_id)
+            
+            if not raw_jobs:
+                logger.warning(f"⚠️  No data found in dataset {dataset_id}")
+                return
         
-        if not raw_jobs:
-            logger.warning(f"⚠️  No data found in dataset {dataset_id}")
-            return
-        
-        logger.info(f"📥 Found {len(raw_jobs)} jobs in dataset {dataset_id}")
+        logger.info(f"📊 Processing {len(raw_jobs)} jobs from dataset {dataset_id}")
         
         # Send to Clay using the same transformation logic as normal runs
         clay_service = ClayService()
@@ -662,7 +684,8 @@ async def process_manual_push(dataset_id: str, actor_config, job_search):
         logger.info(f"✅ Manual push completed - Sent: {result['sent']}, Failed: {result['failed']}")
         
         if result['errors']:
-            logger.error(f"❌ Manual push errors: {result['errors']}")
+            for error in result['errors']:
+                logger.error(f"❌ Manual push error: {error}")
         
     except Exception as e:
         logger.error(f"💥 Manual push failed: {e}")
