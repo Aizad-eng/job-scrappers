@@ -3,6 +3,7 @@ from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy.orm import Session
 import logging
 import asyncio
+import pytz
 
 from database import SessionLocal
 from models import JobSearch
@@ -10,12 +11,15 @@ from scraper_service import JobScraperService
 
 logger = logging.getLogger(__name__)
 
+# Timezone for scheduler
+SCHEDULER_TIMEZONE = pytz.timezone('America/New_York')
+
 
 class JobScheduler:
     """Manage scheduled job executions"""
     
     def __init__(self):
-        self.scheduler = AsyncIOScheduler()
+        self.scheduler = AsyncIOScheduler(timezone=SCHEDULER_TIMEZONE)
         self.job_ids = {}  # Map job_search_id to scheduler job_id
     
     def start(self):
