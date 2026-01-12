@@ -89,6 +89,15 @@
             background: #e53e3e;
         }
         
+        .btn-warning {
+            background: #ed8936;
+            color: white;
+        }
+        
+        .btn-warning:hover {
+            background: #dd6b20;
+        }
+        
         .btn-secondary {
             background: rgba(255,255,255,0.2);
             color: white;
@@ -450,11 +459,14 @@
                                 <button class="btn btn-primary btn-small" onclick="triggerJob({{ job.id }})" title="Run this job now">
                                     ▶️ Run
                                 </button>
+                                <button class="btn btn-warning btn-small" onclick="duplicateJob({{ job.id }})" title="Duplicate this job">
+                                    📋 Copy
+                                </button>
                                 <button class="btn btn-secondary btn-small" onclick="editJob({{ job.id }})" title="Edit job configuration">
                                     ✏️ Edit
                                 </button>
                                 <button class="btn btn-danger btn-small" onclick="deleteJob({{ job.id }}, '{{ job.name }}')" title="Delete this job">
-                                    🗑️ Delete
+                                    🗑️
                                 </button>
                             </div>
                         </td>
@@ -508,14 +520,14 @@
                     <div class="form-group">
                         <label>Search URL *</label>
                         <input type="url" id="search_url" required placeholder="https://www.linkedin.com/jobs/search/...">
-                        <small>Full LinkedIn job search URL</small>
+                        <small>Full LinkedIn or Indeed job search URL</small>
                     </div>
                     
                     <div class="form-row">
                         <div class="form-group">
                             <label>Cron Schedule * <span class="tooltip" data-tooltip="Format: minute hour day month weekday">ℹ️</span></label>
                             <input type="text" id="cron_schedule" required placeholder="0 9 * * *" value="0 9 * * *">
-                            <small>Daily at 9 AM: <code>0 9 * * *</code></small>
+                            <small>Daily at 9 AM: <code>0 9 * * *</code> (Eastern Time)</small>
                         </div>
                         
                         <div class="form-group">
@@ -695,6 +707,30 @@
                 document.getElementById('jobModal').style.display = 'block';
             } catch (error) {
                 alert('Error loading job: ' + error.message);
+            }
+        }
+        
+        // Duplicate job
+        async function duplicateJob(jobId) {
+            if (!confirm('Create a copy of this job search?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/job-searches/${jobId}/duplicate`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    const newJob = await response.json();
+                    alert(`Job duplicated! New job "${newJob.name}" created (inactive). Edit it to customize.`);
+                    location.reload();
+                } else {
+                    const error = await response.json();
+                    alert('Failed to duplicate: ' + error.detail);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
             }
         }
         
