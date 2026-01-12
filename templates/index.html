@@ -52,75 +52,50 @@
                         </select>
                     </div>
                     
-                    <!-- Simple Schedule Dropdown (for Fantastic Jobs) -->
-                    <div id="simpleSchedule">
+                    <!-- Schedule section - hidden until actor is selected -->
+                    <div id="scheduleContainer" class="hidden">
                         <label class="block text-sm font-medium text-gray-700 mb-1">Schedule (EST)</label>
-                        <select name="cron_schedule_simple" id="cronScheduleSimple" class="w-full border rounded-md px-3 py-2">
-                            <option value="0 */6 * * *">Every 6 hours</option>
-                            <option value="0 */12 * * *">Every 12 hours</option>
-                            <option value="0 9 * * *">Daily at 9 AM EST</option>
-                            <option value="0 9 * * 1-5">Weekdays at 9 AM EST</option>
-                            <option value="0 9 * * 1">Weekly on Monday 9 AM EST</option>
-                        </select>
-                    </div>
-                    
-                    <!-- Custom Schedule (for LinkedIn/Indeed) -->
-                    <div id="customSchedule" class="hidden">
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Schedule (EST)</label>
-                        <div class="grid grid-cols-2 gap-2">
-                            <select name="schedule_frequency" id="scheduleFrequency" class="border rounded-md px-3 py-2">
-                                <option value="hourly">Every X hours</option>
-                                <option value="daily">Daily</option>
-                                <option value="weekdays">Weekdays only</option>
-                                <option value="weekly">Weekly</option>
-                                <option value="custom">Custom days</option>
-                            </select>
-                            <input type="time" name="schedule_time" id="scheduleTime" value="09:00" 
-                                   class="border rounded-md px-3 py-2">
-                        </div>
                         
-                        <!-- Hourly interval (shown when "Every X hours" selected) -->
-                        <div id="hourlyOptions" class="mt-2">
-                            <select name="hourly_interval" id="hourlyInterval" class="w-full border rounded-md px-3 py-2">
-                                <option value="1">Every 1 hour</option>
-                                <option value="2">Every 2 hours</option>
-                                <option value="3">Every 3 hours</option>
-                                <option value="4">Every 4 hours</option>
-                                <option value="6" selected>Every 6 hours</option>
-                                <option value="8">Every 8 hours</option>
-                                <option value="12">Every 12 hours</option>
+                        <!-- Fantastic Jobs - Simple intervals -->
+                        <div id="intervalSchedule" class="hidden">
+                            <select name="interval_schedule" id="intervalSelect" class="w-full border rounded-md px-3 py-2">
+                                <option value="0 * * * *">Every 1 hour</option>
+                                <option value="0 0 * * *">Every 24 hours (daily at midnight)</option>
+                                <option value="0 0 * * 0">Every 7 days (weekly on Sunday)</option>
+                                <option value="0 0 1 */6 *">Every 6 months</option>
                             </select>
                         </div>
                         
-                        <!-- Day selector (shown for weekly/custom) -->
-                        <div id="dayOptions" class="mt-2 hidden">
-                            <div class="flex flex-wrap gap-2">
-                                <label class="flex items-center gap-1 text-sm">
-                                    <input type="checkbox" name="day_sun" value="0"> Sun
-                                </label>
-                                <label class="flex items-center gap-1 text-sm">
-                                    <input type="checkbox" name="day_mon" value="1" checked> Mon
-                                </label>
-                                <label class="flex items-center gap-1 text-sm">
-                                    <input type="checkbox" name="day_tue" value="2"> Tue
-                                </label>
-                                <label class="flex items-center gap-1 text-sm">
-                                    <input type="checkbox" name="day_wed" value="3"> Wed
-                                </label>
-                                <label class="flex items-center gap-1 text-sm">
-                                    <input type="checkbox" name="day_thu" value="4"> Thu
-                                </label>
-                                <label class="flex items-center gap-1 text-sm">
-                                    <input type="checkbox" name="day_fri" value="5"> Fri
-                                </label>
-                                <label class="flex items-center gap-1 text-sm">
-                                    <input type="checkbox" name="day_sat" value="6"> Sat
-                                </label>
+                        <!-- LinkedIn/Indeed - Time-based scheduling -->
+                        <div id="timeSchedule" class="hidden">
+                            <div class="space-y-3">
+                                <div class="grid grid-cols-2 gap-2">
+                                    <select name="frequency" id="frequencySelect" class="border rounded-md px-3 py-2">
+                                        <option value="daily">Every day</option>
+                                        <option value="weekdays">Weekdays only</option>
+                                        <option value="weekly">Weekly</option>
+                                    </select>
+                                    <input type="time" name="time" id="timeInput" value="09:00" 
+                                           class="border rounded-md px-3 py-2">
+                                </div>
+                                
+                                <!-- Day selector for weekly -->
+                                <div id="weeklyDaySelect" class="hidden">
+                                    <label class="block text-sm text-gray-600 mb-1">Select day of week:</label>
+                                    <select name="weekly_day" id="weeklyDayInput" class="w-full border rounded-md px-3 py-2">
+                                        <option value="1">Monday</option>
+                                        <option value="2">Tuesday</option>
+                                        <option value="3">Wednesday</option>
+                                        <option value="4">Thursday</option>
+                                        <option value="5">Friday</option>
+                                        <option value="6">Saturday</option>
+                                        <option value="0">Sunday</option>
+                                    </select>
+                                </div>
+                                
+                                <p id="schedulePreview" class="text-xs text-gray-500"></p>
                             </div>
                         </div>
-                        
-                        <!-- Preview -->
-                        <p id="schedulePreview" class="text-xs text-gray-500 mt-2"></p>
                     </div>
                 </div>
 
@@ -382,56 +357,55 @@
         
         const EST_TIMEZONE = 'America/New_York';
         
-        const simpleSchedule = document.getElementById('simpleSchedule');
-        const customSchedule = document.getElementById('customSchedule');
-        const scheduleFrequency = document.getElementById('scheduleFrequency');
-        const hourlyOptions = document.getElementById('hourlyOptions');
-        const dayOptions = document.getElementById('dayOptions');
+        const scheduleContainer = document.getElementById('scheduleContainer');
+        const intervalSchedule = document.getElementById('intervalSchedule');
+        const timeSchedule = document.getElementById('timeSchedule');
+        const frequencySelect = document.getElementById('frequencySelect');
+        const weeklyDaySelect = document.getElementById('weeklyDaySelect');
         const schedulePreview = document.getElementById('schedulePreview');
-        const scheduleTime = document.getElementById('scheduleTime');
-        const hourlyInterval = document.getElementById('hourlyInterval');
+        const timeInput = document.getElementById('timeInput');
+        const weeklyDayInput = document.getElementById('weeklyDayInput');
         
-        function updateScheduleUI(scheduleType) {
-            if (scheduleType === 'custom') {
-                simpleSchedule.classList.add('hidden');
-                customSchedule.classList.remove('hidden');
+        function showScheduleForActor(actorKey) {
+            // Hide schedule container if no actor selected
+            if (!actorKey) {
+                scheduleContainer.classList.add('hidden');
+                return;
+            }
+            
+            // Show schedule container
+            scheduleContainer.classList.remove('hidden');
+            
+            // Show appropriate schedule UI based on actor
+            if (actorKey === 'fantastic_jobs') {
+                intervalSchedule.classList.remove('hidden');
+                timeSchedule.classList.add('hidden');
             } else {
-                simpleSchedule.classList.remove('hidden');
-                customSchedule.classList.add('hidden');
+                intervalSchedule.classList.add('hidden');
+                timeSchedule.classList.remove('hidden');
+                updateTimeSchedulePreview();
             }
         }
         
-        function updateScheduleOptions() {
-            const freq = scheduleFrequency.value;
+        function updateTimeScheduleOptions() {
+            const freq = frequencySelect.value;
             
-            if (freq === 'hourly') {
-                hourlyOptions.classList.remove('hidden');
-                dayOptions.classList.add('hidden');
-                scheduleTime.parentElement.querySelector('input[type="time"]').classList.add('hidden');
-            } else if (freq === 'weekly' || freq === 'custom') {
-                hourlyOptions.classList.add('hidden');
-                dayOptions.classList.remove('hidden');
-                scheduleTime.classList.remove('hidden');
+            if (freq === 'weekly') {
+                weeklyDaySelect.classList.remove('hidden');
             } else {
-                hourlyOptions.classList.add('hidden');
-                dayOptions.classList.add('hidden');
-                scheduleTime.classList.remove('hidden');
+                weeklyDaySelect.classList.add('hidden');
             }
             
-            updateSchedulePreview();
+            updateTimeSchedulePreview();
         }
         
-        function buildCronExpression() {
-            const freq = scheduleFrequency.value;
-            const time = scheduleTime.value.split(':');
+        function buildTimeBasedCron() {
+            const time = timeInput.value.split(':');
             const hour = parseInt(time[0]);
             const minute = parseInt(time[1]);
+            const freq = frequencySelect.value;
             
             switch (freq) {
-                case 'hourly':
-                    const interval = hourlyInterval.value;
-                    return `0 */${interval} * * *`;
-                
                 case 'daily':
                     return `${minute} ${hour} * * *`;
                 
@@ -439,38 +413,35 @@
                     return `${minute} ${hour} * * 1-5`;
                 
                 case 'weekly':
-                case 'custom':
-                    const days = [];
-                    document.querySelectorAll('#dayOptions input:checked').forEach(cb => {
-                        days.push(cb.value);
-                    });
-                    const dayStr = days.length > 0 ? days.join(',') : '*';
-                    return `${minute} ${hour} * * ${dayStr}`;
+                    const day = weeklyDayInput.value;
+                    return `${minute} ${hour} * * ${day}`;
                 
                 default:
-                    return '0 9 * * *';
+                    return `${minute} ${hour} * * *`;
             }
         }
         
-        function updateSchedulePreview() {
-            const cron = buildCronExpression();
+        function updateTimeSchedulePreview() {
+            if (!schedulePreview) return;
+            
+            const cron = buildTimeBasedCron();
             try {
-                schedulePreview.textContent = 'Schedule (EST): ' + cronstrue.toString(cron);
+                schedulePreview.textContent = cronstrue.toString(cron);
             } catch (e) {
-                schedulePreview.textContent = 'Cron: ' + cron;
+                schedulePreview.textContent = cron;
             }
         }
         
-        // Event listeners for schedule builder
-        scheduleFrequency.addEventListener('change', updateScheduleOptions);
-        scheduleTime.addEventListener('change', updateSchedulePreview);
-        hourlyInterval.addEventListener('change', updateSchedulePreview);
-        document.querySelectorAll('#dayOptions input').forEach(cb => {
-            cb.addEventListener('change', updateSchedulePreview);
-        });
-        
-        // Initialize
-        updateScheduleOptions();
+        // Event listeners for time-based schedule
+        if (frequencySelect) {
+            frequencySelect.addEventListener('change', updateTimeScheduleOptions);
+        }
+        if (timeInput) {
+            timeInput.addEventListener('change', updateTimeSchedulePreview);
+        }
+        if (weeklyDayInput) {
+            weeklyDayInput.addEventListener('change', updateTimeSchedulePreview);
+        }
 
         // =================================================================
         // NEXT RUN CALCULATION
@@ -503,16 +474,16 @@
             if (!option.value) {
                 actorInputs.innerHTML = '<p class="text-gray-500 text-sm">Select an actor to see its input fields</p>';
                 filterRules.classList.add('hidden');
-                updateScheduleUI('simple');
+                showScheduleForActor(null);
                 return;
             }
             
             const schema = JSON.parse(option.dataset.schema || '[]');
             const filters = JSON.parse(option.dataset.filters || '{}');
-            const scheduleType = option.dataset.scheduleType || 'simple';
+            const actorKey = option.value;
             
-            // Update schedule UI based on actor type
-            updateScheduleUI(scheduleType);
+            // Show appropriate schedule UI for this actor
+            showScheduleForActor(actorKey);
             
             // Generate input fields
             actorInputs.innerHTML = '<h3 class="font-medium text-gray-700 mb-3">Actor Inputs</h3>' +
@@ -617,10 +588,10 @@
             
             // Determine cron schedule based on actor type
             let cronSchedule;
-            if (actorConfig && actorConfig.schedule_type === 'custom') {
-                cronSchedule = buildCronExpression();
+            if (actorKey === 'fantastic_jobs') {
+                cronSchedule = formData.get('interval_schedule');
             } else {
-                cronSchedule = formData.get('cron_schedule_simple');
+                cronSchedule = buildTimeBasedCron();
             }
             
             // Build actor_inputs from dynamic fields
