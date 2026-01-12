@@ -166,7 +166,8 @@ class ScraperService:
                 "run_id": job_run.id,
                 "jobs_found": job_run.jobs_found,
                 "jobs_filtered": job_run.jobs_filtered,
-                "jobs_sent": job_run.jobs_sent
+                "jobs_sent": job_run.jobs_sent,
+                "error": None
             }
         
         except Exception as e:
