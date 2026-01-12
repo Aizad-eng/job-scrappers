@@ -6,6 +6,7 @@ Adding a new scraper = Adding config to actor_registry.py. That's it.
 
 import os
 import logging
+import httpx
 from typing import List, Optional
 from datetime import datetime
 
@@ -424,6 +425,104 @@ async def get_run_details(run_id: int, db: Session = Depends(get_db)):
     )
 
 
+@app.post("/api/runs/{run_id}/fetch-dataset")
+async def fetch_and_process_dataset(
+    run_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """
+    Fallback endpoint: Manually fetch data from Apify dataset and process it.
+    Useful when a run times out but dataset contains partial data.
+    """
+    run = db.query(JobRun).filter(JobRun.id == run_id).first()
+    
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    
+    if not run.apify_dataset_id:
+        raise HTTPException(status_code=400, detail="No dataset ID associated with this run")
+    
+    job_search = db.query(JobSearch).filter(JobSearch.id == run.job_search_id).first()
+    if not job_search:
+        raise HTTPException(status_code=404, detail="Job search not found")
+    
+    # Get Apify token
+    apify_token = job_search.apify_token or os.getenv("APIFY_API_TOKEN")
+    
+    if not apify_token:
+        raise HTTPException(status_code=400, detail="No Apify token configured")
+    
+    # Process dataset in background
+    background_tasks.add_task(
+        process_dataset_fallback,
+        run_id,
+        run.apify_dataset_id,
+        apify_token,
+        db
+    )
+    
+    return {
+        "success": True,
+        "message": f"Started processing dataset {run.apify_dataset_id} for run {run_id}",
+        "dataset_id": run.apify_dataset_id,
+        "dataset_url": f"https://console.apify.com/storage/datasets/{run.apify_dataset_id}"
+    }
+
+
+@app.post("/api/runs/{run_id}/push-to-clay")
+async def push_run_to_clay(
+    run_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """
+    Manually push run data to Clay webhook in batches.
+    Useful when Clay sending fails during normal execution.
+    """
+    run = db.query(JobRun).filter(JobRun.id == run_id).first()
+    
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    
+    job_search = db.query(JobSearch).filter(JobSearch.id == run.job_search_id).first()
+    if not job_search:
+        raise HTTPException(status_code=404, detail="Job search not found")
+    
+    if not job_search.clay_webhook_url:
+        raise HTTPException(status_code=400, detail="No Clay webhook URL configured for this job search")
+    
+    # Count jobs to send
+    jobs_to_send = db.query(ScrapedJob).filter(
+        ScrapedJob.job_run_id == run_id,
+        ScrapedJob.filtered_out == False
+    ).count()
+    
+    if jobs_to_send == 0:
+        return {
+            "success": False,
+            "message": "No jobs available to send (all filtered out or no jobs found)"
+        }
+    
+    # Start background task to push to Clay
+    background_tasks.add_task(
+        push_to_clay_batch_task,
+        run_id,
+        job_search.clay_webhook_url,
+        job_search.batch_size or 8,
+        job_search.batch_interval_ms or 2000,
+        db
+    )
+    
+    return {
+        "success": True,
+        "message": f"Started pushing {jobs_to_send} jobs to Clay webhook",
+        "jobs_to_send": jobs_to_send,
+        "batch_size": job_search.batch_size or 8,
+        "batch_interval": f"{(job_search.batch_interval_ms or 2000)/1000}s"
+    }
+
+
 # =============================================================================
 # HEALTH CHECK & SCHEDULER STATUS
 # =============================================================================
@@ -616,6 +715,259 @@ async def get_analytics_overview(
             } for row in search_query
         ]
     }
+
+# =============================================================================
+# BACKGROUND TASKS
+# =============================================================================
+
+async def process_dataset_fallback(run_id: int, dataset_id: str, apify_token: str, db_session: Session):
+    """
+    Background task to process dataset data from Apify and send to Clay.
+    This is a fallback when the main run times out but data is available.
+    """
+    from database import SessionLocal
+    from scraper_service import ScraperService
+    from actor_registry import ActorRegistry
+    
+    db = SessionLocal()
+    try:
+        # Get run and job search info
+        run = db.query(JobRun).filter(JobRun.id == run_id).first()
+        if not run:
+            logger.error(f"[FALLBACK] Run {run_id} not found")
+            return
+        
+        job_search = db.query(JobSearch).filter(JobSearch.id == run.job_search_id).first()
+        if not job_search:
+            logger.error(f"[FALLBACK] Job search {run.job_search_id} not found")
+            return
+        
+        logger.info(f"[FALLBACK] Processing dataset {dataset_id} for run {run_id}")
+        
+        # Get actor config
+        registry = ActorRegistry(db)
+        actor_config = registry.get_actor(job_search.actor_key)
+        
+        # Initialize services
+        scraper_service = ScraperService(db, apify_token)
+        apify_service = scraper_service.apify_service
+        filter_service = scraper_service.filter_service
+        clay_service = scraper_service.clay_service
+        
+        # Fetch data from dataset
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            raw_jobs = await apify_service._get_dataset_items(client, dataset_id)
+        
+        logger.info(f"[FALLBACK] Fetched {len(raw_jobs)} jobs from dataset {dataset_id}")
+        
+        if not raw_jobs:
+            logger.warning(f"[FALLBACK] No data found in dataset {dataset_id}")
+            return
+        
+        # Filter jobs
+        passed_jobs, filtered_jobs = filter_service.filter_jobs(
+            jobs=raw_jobs,
+            actor_config=actor_config,
+            job_search=job_search
+        )
+        
+        # Store jobs in database (clear existing first to avoid duplicates)
+        db.query(ScrapedJob).filter(ScrapedJob.job_run_id == run_id).delete()
+        
+        from template_engine import extract_fields
+        for job_data in passed_jobs:
+            extracted = extract_fields(job_data, actor_config.output_mapping or {})
+            
+            scraped_job = ScrapedJob(
+                job_run_id=run_id,
+                job_id=extracted.get("job_id"),
+                raw_data=job_data,
+                extracted_data=extracted,
+                sent_to_clay=False,
+                filtered_out=False
+            )
+            db.add(scraped_job)
+        
+        for job_data, reason in filtered_jobs:
+            extracted = extract_fields(job_data, actor_config.output_mapping or {})
+            
+            scraped_job = ScrapedJob(
+                job_run_id=run_id,
+                job_id=extracted.get("job_id"),
+                raw_data=job_data,
+                extracted_data=extracted,
+                sent_to_clay=False,
+                filtered_out=True,
+                filter_reason=reason
+            )
+            db.add(scraped_job)
+        
+        # Send to Clay if webhook configured
+        jobs_sent = 0
+        if passed_jobs and job_search.clay_webhook_url:
+            extra_fields = {
+                "platform": actor_config.actor_key,
+                "search_name": job_search.name
+            }
+            
+            clay_result = await clay_service.send_jobs(
+                jobs=passed_jobs,
+                actor_config=actor_config,
+                job_search=job_search,
+                extra_fields=extra_fields
+            )
+            
+            jobs_sent = clay_result["sent"]
+            
+            # Update sent status
+            if jobs_sent > 0:
+                db.query(ScrapedJob).filter(
+                    ScrapedJob.job_run_id == run_id,
+                    ScrapedJob.filtered_out == False
+                ).update({"sent_to_clay": True})
+        
+        # Update run statistics
+        run.jobs_found = len(raw_jobs)
+        run.jobs_filtered = len(filtered_jobs)
+        run.jobs_sent = jobs_sent
+        run.status = "completed"
+        run.completed_at = datetime.utcnow()
+        
+        db.commit()
+        
+        logger.info(f"[FALLBACK] Completed: Found {len(raw_jobs)}, Filtered {len(filtered_jobs)}, Sent {jobs_sent}")
+        
+    except Exception as e:
+        logger.exception(f"[FALLBACK] Error processing dataset {dataset_id}: {e}")
+        
+        # Mark run as failed
+        if 'run' in locals():
+            run.status = "failed"
+            run.error_message = f"Fallback processing failed: {str(e)}"
+            run.completed_at = datetime.utcnow()
+            db.commit()
+    finally:
+        db.close()
+
+
+async def push_to_clay_batch_task(
+    run_id: int,
+    clay_webhook_url: str,
+    batch_size: int,
+    batch_interval_ms: int,
+    db_session: Session
+):
+    """
+    Background task to push scraped jobs to Clay webhook in batches.
+    """
+    import asyncio
+    from database import SessionLocal
+    from actor_registry import ActorRegistry
+    from clay_service import ClayService
+    
+    db = SessionLocal()
+    try:
+        # Get run info
+        run = db.query(JobRun).filter(JobRun.id == run_id).first()
+        if not run:
+            logger.error(f"[CLAY-PUSH] Run {run_id} not found")
+            return
+        
+        job_search = db.query(JobSearch).filter(JobSearch.id == run.job_search_id).first()
+        if not job_search:
+            logger.error(f"[CLAY-PUSH] Job search {run.job_search_id} not found")
+            return
+        
+        # Get actor config
+        registry = ActorRegistry(db)
+        actor_config = registry.get_actor(job_search.actor_key)
+        
+        # Get all jobs that passed filters and haven't been sent yet
+        jobs_to_send = db.query(ScrapedJob).filter(
+            ScrapedJob.job_run_id == run_id,
+            ScrapedJob.filtered_out == False
+        ).all()
+        
+        if not jobs_to_send:
+            logger.warning(f"[CLAY-PUSH] No jobs to send for run {run_id}")
+            return
+        
+        logger.info(f"[CLAY-PUSH] Starting manual Clay push for run {run_id}: {len(jobs_to_send)} jobs in batches of {batch_size}")
+        
+        # Initialize Clay service
+        clay_service = ClayService()
+        
+        # Process in batches
+        total_sent = 0
+        total_failed = 0
+        batch_interval_seconds = batch_interval_ms / 1000
+        
+        for i in range(0, len(jobs_to_send), batch_size):
+            batch = jobs_to_send[i:i + batch_size]
+            batch_num = (i // batch_size) + 1
+            total_batches = (len(jobs_to_send) + batch_size - 1) // batch_size
+            
+            logger.info(f"[CLAY-PUSH] Processing batch {batch_num}/{total_batches} ({len(batch)} jobs)")
+            
+            # Prepare batch data - convert ScrapedJob objects to raw data
+            batch_raw_data = []
+            for job in batch:
+                batch_raw_data.append(job.raw_data)
+            
+            try:
+                # Build extra fields
+                extra_fields = {
+                    "platform": actor_config.actor_key,
+                    "search_name": job_search.name,
+                    "manual_push": True,
+                    "batch_number": batch_num
+                }
+                
+                # Send batch to Clay
+                clay_result = await clay_service.send_jobs(
+                    jobs=batch_raw_data,
+                    actor_config=actor_config,
+                    job_search=job_search,
+                    extra_fields=extra_fields
+                )
+                
+                batch_sent = clay_result.get("sent", 0)
+                total_sent += batch_sent
+                
+                # Update database - mark these jobs as sent
+                if batch_sent > 0:
+                    job_ids = [job.id for job in batch[:batch_sent]]
+                    db.query(ScrapedJob).filter(
+                        ScrapedJob.id.in_(job_ids)
+                    ).update({"sent_to_clay": True}, synchronize_session=False)
+                    db.commit()
+                
+                logger.info(f"[CLAY-PUSH] Batch {batch_num}/{total_batches}: {batch_sent}/{len(batch)} jobs sent successfully")
+                
+                if batch_sent < len(batch):
+                    total_failed += len(batch) - batch_sent
+                    logger.warning(f"[CLAY-PUSH] Batch {batch_num}: {len(batch) - batch_sent} jobs failed to send")
+                
+            except Exception as e:
+                logger.error(f"[CLAY-PUSH] Batch {batch_num} failed: {e}")
+                total_failed += len(batch)
+            
+            # Wait before next batch (unless it's the last batch)
+            if i + batch_size < len(jobs_to_send):
+                logger.info(f"[CLAY-PUSH] Waiting {batch_interval_seconds}s before next batch...")
+                await asyncio.sleep(batch_interval_seconds)
+        
+        # Update run statistics
+        run.jobs_sent = total_sent
+        db.commit()
+        
+        logger.info(f"[CLAY-PUSH] Completed: {total_sent} jobs sent successfully, {total_failed} failed")
+        
+    except Exception as e:
+        logger.exception(f"[CLAY-PUSH] Error in batch push task: {e}")
+    finally:
+        db.close()
+
 
 # =============================================================================
 # ERROR HANDLING

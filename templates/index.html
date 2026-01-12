@@ -247,6 +247,19 @@
             </div>
         </div>
 
+        <!-- Logs Modal -->
+        <div id="logsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+            <div class="bg-white rounded-lg shadow-xl max-w-6xl w-full mx-4 max-h-[90vh] overflow-hidden">
+                <div class="p-4 border-b flex justify-between items-center">
+                    <h3 class="text-lg font-semibold">Execution Logs</h3>
+                    <button onclick="closeLogsModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+                </div>
+                <div id="logsContent" class="p-4 overflow-y-auto max-h-[75vh] bg-gray-900 text-gray-100 font-mono text-sm whitespace-pre-wrap">
+                    Loading...
+                </div>
+            </div>
+        </div>
+
         <!-- Quick View Modal -->
         <div id="detailsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
             <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] overflow-hidden">
@@ -1068,6 +1081,7 @@
                                 <th class="px-3 py-2 text-left text-sm">Found</th>
                                 <th class="px-3 py-2 text-left text-sm">Filtered</th>
                                 <th class="px-3 py-2 text-left text-sm">Sent</th>
+                                <th class="px-3 py-2 text-left text-sm">Actions</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y">
@@ -1078,6 +1092,26 @@
                                     <td class="px-3 py-2 text-sm">${run.jobs_found}</td>
                                     <td class="px-3 py-2 text-sm">${run.jobs_filtered}</td>
                                     <td class="px-3 py-2 text-sm">${run.jobs_sent}</td>
+                                    <td class="px-3 py-2 text-sm">
+                                        <div class="flex gap-2 flex-wrap">
+                                            <button onclick="viewRunLogs(${run.id})" 
+                                                    class="text-blue-600 hover:text-blue-800 text-xs font-medium">
+                                                View Logs
+                                            </button>
+                                            ${run.apify_dataset_id ? `
+                                                <button onclick="fetchDataset(${run.id})" 
+                                                        class="text-green-600 hover:text-green-800 text-xs font-medium">
+                                                    Fetch Dataset
+                                                </button>
+                                            ` : ''}
+                                            ${(run.jobs_found > 0 && run.jobs_filtered >= 0) ? `
+                                                <button onclick="pushToClay(${run.id})" 
+                                                        class="text-purple-600 hover:text-purple-800 text-xs font-medium">
+                                                    Push to Clay
+                                                </button>
+                                            ` : ''}
+                                        </div>
+                                    </td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -1092,6 +1126,85 @@
             const modal = document.getElementById('historyModal');
             modal.classList.add('hidden');
             modal.classList.remove('flex');
+        }
+        
+        async function viewRunLogs(runId) {
+            const modal = document.getElementById('logsModal');
+            const content = document.getElementById('logsContent');
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            content.innerHTML = 'Loading logs...';
+            
+            try {
+                const response = await fetch(`/api/runs/${runId}`);
+                const runData = await response.json();
+                
+                if (runData.run.execution_logs) {
+                    content.innerHTML = runData.run.execution_logs;
+                } else if (runData.run.error_message) {
+                    content.innerHTML = `❌ ERROR: ${runData.run.error_message}\n\nNo detailed logs available for this run.`;
+                } else {
+                    content.innerHTML = 'No logs available for this run.';
+                }
+                
+                // Update modal title with run info
+                const title = modal.querySelector('h3');
+                title.textContent = `Execution Logs - Run #${runId} (${runData.run.status})`;
+                
+            } catch (error) {
+                content.innerHTML = `Error loading logs: ${error.message}`;
+            }
+        }
+        
+        function closeLogsModal() {
+            const modal = document.getElementById('logsModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+        
+        async function fetchDataset(runId) {
+            if (!confirm('Fetch and process dataset data as fallback? This will overwrite any existing results for this run.')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/runs/${runId}/fetch-dataset`, {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`✅ Dataset processing started!\n\nDataset ID: ${result.dataset_id}\n\nView progress in Apify Console: ${result.dataset_url}\n\nRefresh the page in a few minutes to see results.`);
+                } else {
+                    alert('Error: ' + (result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        async function pushToClay(runId) {
+            if (!confirm('Push this run\\'s data to Clay webhook manually? This will send jobs in batches according to the job search settings.')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/runs/${runId}/push-to-clay`, {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`🚀 Clay push started!\n\nJobs to send: ${result.jobs_to_send}\nBatch size: ${result.batch_size} jobs per batch\nInterval: ${result.batch_interval}\n\nThe jobs will be sent in the background. Refresh the page in a few minutes to see updated statistics.`);
+                } else {
+                    alert('❌ Error: ' + (result.message || result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
         }
         
         async function duplicateSearch(id) {
@@ -1136,6 +1249,7 @@
                 closeModal();
                 closeEditModal();
                 closeDetailsModal();
+                closeLogsModal();
             }
         });
     </script>

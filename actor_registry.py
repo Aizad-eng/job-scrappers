@@ -25,7 +25,7 @@ SEED_ACTORS = {
     "linkedin": {
         "display_name": "LinkedIn Jobs",
         "actor_id": "curious_coder~linkedin-jobs-scraper",
-        "default_timeout_minutes": 15,
+        "default_timeout_minutes": 90,  # Allow up to 1.5 hours for large LinkedIn searches
         "default_max_results": 1000,
         "schedule_type": "custom",  # Allows custom date/time scheduling
         
@@ -125,7 +125,7 @@ SEED_ACTORS = {
     "indeed": {
         "display_name": "Indeed Jobs",
         "actor_id": "curious_coder~indeed-scraper",
-        "default_timeout_minutes": 35,
+        "default_timeout_minutes": 120,  # 2 hours for Indeed jobs
         "default_max_results": 200,
         "schedule_type": "custom",  # Allows custom date/time scheduling
         
@@ -243,7 +243,7 @@ SEED_ACTORS = {
     "fantastic_jobs": {
         "display_name": "Fantastic Jobs (Career Sites)",
         "actor_id": "fantastic-jobs~advanced-linkedin-job-search-api",
-        "default_timeout_minutes": 20,
+        "default_timeout_minutes": 120,  # 2 hours for Fantastic Jobs
         "default_max_results": 100,
         "schedule_type": "simple",  # Simple dropdown only
         

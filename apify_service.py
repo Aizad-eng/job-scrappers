@@ -28,7 +28,8 @@ class ApifyService:
         self,
         actor_config: ActorConfig,
         job_search: JobSearch,
-        timeout_minutes: Optional[int] = None
+        timeout_minutes: Optional[int] = None,
+        progress_callback = None
     ) -> Dict[str, Any]:
         """
         Run an Apify actor using config-driven payload building.
@@ -58,14 +59,16 @@ class ApifyService:
             
             logger.info(f"Started actor run: {run_id}")
             
-            # Poll for completion
-            status = await self._wait_for_completion(client, run_id, timeout)
+            # Get dataset ID early for progressive fetching
+            dataset_id = run_data.get("defaultDatasetId")
+            
+            # Poll for completion with progressive data fetching
+            status = await self._wait_for_completion(client, run_id, timeout, dataset_id, progress_callback)
             
             if status not in ["SUCCEEDED", "FINISHED"]:
                 raise Exception(f"Actor run failed with status: {status}")
             
-            # Get dataset items
-            dataset_id = run_data.get("defaultDatasetId")
+            # Get final dataset items (dataset_id already retrieved earlier)
             items = await self._get_dataset_items(client, dataset_id)
             
             return {
@@ -158,37 +161,89 @@ class ApifyService:
         self,
         client: httpx.AsyncClient,
         run_id: str,
-        timeout_minutes: int
+        timeout_minutes: int,
+        dataset_id: str = None,
+        progress_callback = None
     ) -> str:
-        """Poll for actor run completion"""
+        """Poll for actor run completion with progressive data fetching"""
         
         status_url = f"{self.BASE_URL}/actor-runs/{run_id}"
-        max_attempts = timeout_minutes * 6  # Check every 10 seconds
+        start_time = datetime.now()
+        attempt = 0
+        last_progress_check = start_time
+        last_item_count = 0
         
-        for attempt in range(max_attempts):
+        while True:
             response = await client.get(
                 status_url,
                 params={"token": self.api_token}
             )
             response.raise_for_status()
             
-            status = response.json()["data"]["status"]
+            run_data = response.json()["data"]
+            status = run_data["status"]
+            attempt += 1
+            elapsed_minutes = (datetime.now() - start_time).total_seconds() / 60
+            
+            # Get dataset ID if not provided
+            if not dataset_id:
+                dataset_id = run_data.get("defaultDatasetId")
             
             if status in ["SUCCEEDED", "FINISHED", "FAILED", "ABORTED", "TIMED-OUT"]:
+                logger.info(f"[APIFY] Run {run_id} completed with status: {status} after {elapsed_minutes:.1f} minutes")
                 return status
             
-            logger.debug(f"Run {run_id} status: {status} (attempt {attempt + 1}/{max_attempts})")
-            await asyncio.sleep(10)
-        
-        raise TimeoutError(f"Actor run {run_id} timed out after {timeout_minutes} minutes")
+            # Progressive data fetching: check for new items every 3 minutes
+            time_since_progress = (datetime.now() - last_progress_check).total_seconds() / 60
+            if time_since_progress >= 3 and dataset_id:
+                try:
+                    # Get current item count
+                    current_items = await self._get_dataset_item_count(client, dataset_id)
+                    
+                    if current_items > last_item_count:
+                        logger.info(f"[APIFY] Progressive update: {current_items} items scraped so far (+{current_items - last_item_count} new)")
+                        
+                        # Call progress callback if provided (for processing partial data)
+                        if progress_callback and current_items > 0:
+                            try:
+                                partial_items = await self._get_dataset_items(client, dataset_id, offset=last_item_count, limit=current_items - last_item_count)
+                                await progress_callback(partial_items, current_items, False)  # False = not final
+                            except Exception as e:
+                                logger.warning(f"[APIFY] Progress callback failed: {e}")
+                        
+                        last_item_count = current_items
+                    
+                    last_progress_check = datetime.now()
+                except Exception as e:
+                    logger.warning(f"[APIFY] Could not fetch progress data: {e}")
+            
+            # Continue polling even beyond original timeout (but log warnings)
+            if elapsed_minutes >= timeout_minutes:
+                logger.warning(f"[APIFY] Run {run_id} exceeded timeout ({timeout_minutes}m) but still running - continuing to poll...")
+            
+            # Adaptive polling intervals:
+            # First 5 minutes: check every 30 seconds (fast for quick jobs)
+            # 5-15 minutes: check every 60 seconds  
+            # 15+ minutes: check every 120 seconds (efficient for long jobs)
+            if elapsed_minutes < 5:
+                wait_seconds = 30
+            elif elapsed_minutes < 15:
+                wait_seconds = 60
+            else:
+                wait_seconds = 120
+            
+            timeout_status = f" [OVERTIME: +{elapsed_minutes - timeout_minutes:.1f}m]" if elapsed_minutes >= timeout_minutes else ""
+            logger.info(f"[APIFY] Run {run_id} status: {status} (attempt {attempt}, {elapsed_minutes:.1f}m elapsed{timeout_status}) - waiting {wait_seconds}s...")
+            await asyncio.sleep(wait_seconds)
     
     async def _get_dataset_items(
         self,
         client: httpx.AsyncClient,
         dataset_id: str,
-        limit: int = 10000
+        limit: int = 10000,
+        offset: int = 0
     ) -> List[Dict]:
-        """Fetch all items from a dataset"""
+        """Fetch items from a dataset with pagination support"""
         
         if not dataset_id:
             return []
@@ -200,12 +255,34 @@ class ApifyService:
             params={
                 "token": self.api_token,
                 "limit": limit,
+                "offset": offset,
                 "format": "json"
             }
         )
         response.raise_for_status()
         
         return response.json()
+    
+    async def _get_dataset_item_count(
+        self,
+        client: httpx.AsyncClient,
+        dataset_id: str
+    ) -> int:
+        """Get the current number of items in a dataset"""
+        
+        if not dataset_id:
+            return 0
+        
+        dataset_url = f"{self.BASE_URL}/datasets/{dataset_id}"
+        
+        response = await client.get(
+            dataset_url,
+            params={"token": self.api_token}
+        )
+        response.raise_for_status()
+        
+        dataset_info = response.json()["data"]
+        return dataset_info.get("itemCount", 0)
     
     async def get_run_status(self, run_id: str) -> Dict:
         """Get current status of a run"""

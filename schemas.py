@@ -128,6 +128,7 @@ class JobRunResponse(BaseModel):
     jobs_filtered: int
     jobs_sent: int
     error_message: Optional[str]
+    execution_logs: Optional[str]
     apify_run_id: Optional[str]
     
     class Config:

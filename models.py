@@ -126,6 +126,7 @@ class JobRun(Base):
     jobs_sent = Column(Integer, default=0)
     
     error_message = Column(Text)
+    execution_logs = Column(Text)  # Store detailed execution logs
     apify_run_id = Column(String(255))
     apify_dataset_id = Column(String(255))
     
