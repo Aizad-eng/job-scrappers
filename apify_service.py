@@ -290,6 +290,42 @@ class ApifyService:
         async with httpx.AsyncClient(timeout=60.0) as client:
             return await self._get_dataset_items(client, dataset_id, limit, offset)
     
+    async def get_all_dataset_items(self, dataset_id: str, chunk_size: int = 1000) -> List[Dict]:
+        """Fetch all items from a dataset using pagination"""
+        
+        if not dataset_id:
+            return []
+        
+        all_items = []
+        offset = 0
+        
+        logger.info(f"📥 Starting paginated fetch for dataset {dataset_id} (chunk size: {chunk_size})")
+        
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            while True:
+                logger.info(f"📄 Fetching chunk: offset {offset}, limit {chunk_size}")
+                
+                chunk = await self._get_dataset_items(client, dataset_id, chunk_size, offset)
+                
+                if not chunk:
+                    logger.info(f"✅ Finished fetching dataset - no more data at offset {offset}")
+                    break
+                
+                chunk_count = len(chunk)
+                all_items.extend(chunk)
+                
+                logger.info(f"📊 Fetched {chunk_count} items (total so far: {len(all_items)})")
+                
+                # If we got fewer items than requested, we've reached the end
+                if chunk_count < chunk_size:
+                    logger.info(f"✅ Finished fetching dataset - reached end (got {chunk_count} < {chunk_size})")
+                    break
+                
+                offset += chunk_size
+        
+        logger.info(f"🎉 Completed dataset fetch: {len(all_items)} total items from dataset {dataset_id}")
+        return all_items
+    
     async def get_run_status(self, run_id: str) -> Dict:
         """Get current status of a run"""
         

@@ -613,20 +613,28 @@ async def manual_push_to_clay(
         if not apify_token:
             return {"success": False, "error": "No Apify token configured"}
         
-        # First, fetch the dataset to validate it exists and get job count
+        # First, validate dataset exists by fetching just a small sample
         logger.info(f"🔍 Validating dataset {data.dataset_id} for manual push")
         
         apify_service = ApifyService(apify_token)
-        raw_jobs = await apify_service.get_dataset_items(data.dataset_id)
         
-        if not raw_jobs:
+        # Get just first 10 items to validate dataset exists
+        sample_jobs = await apify_service.get_dataset_items(data.dataset_id, limit=10)
+        
+        if not sample_jobs:
             return {
                 "success": False, 
                 "error": f"No data found in dataset {data.dataset_id}. Dataset may be empty or doesn't exist."
             }
         
-        jobs_count = len(raw_jobs)
-        logger.info(f"📊 Found {jobs_count} jobs in dataset {data.dataset_id}")
+        # Get total item count from dataset metadata (more efficient than fetching all)
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                jobs_count = await apify_service._get_dataset_item_count(client, data.dataset_id)
+            logger.info(f"📊 Dataset {data.dataset_id} contains {jobs_count} total jobs")
+        except Exception as e:
+            logger.warning(f"Could not get exact count, will fetch all: {e}")
+            jobs_count = "unknown (will fetch all)"
         
         # Create temporary job search object for Clay service
         class TempJobSearch:
@@ -637,16 +645,19 @@ async def manual_push_to_clay(
         
         temp_job_search = TempJobSearch()
         
-        # Add background task to process the push (pass the already-fetched jobs)
+        # Add background task to process the push (no pre-fetched jobs, will use pagination)
         background_tasks.add_task(
             process_manual_push,
             data.dataset_id,
             actor_config,
             temp_job_search,
-            raw_jobs  # Pass the jobs we already fetched
+            None  # Will fetch all data using pagination in background
         )
         
-        estimated_time_minutes = (jobs_count * data.batch_interval_ms) / (data.batch_size * 60000)
+        if isinstance(jobs_count, int):
+            estimated_time_minutes = (jobs_count * data.batch_interval_ms) / (data.batch_size * 60000)
+        else:
+            estimated_time_minutes = None
         
         return {
             "success": True,
@@ -656,7 +667,7 @@ async def manual_push_to_clay(
             "jobs_found": jobs_count,
             "batch_size": data.batch_size,
             "batch_interval_ms": data.batch_interval_ms,
-            "estimated_time_minutes": round(estimated_time_minutes, 1)
+            "estimated_time_minutes": round(estimated_time_minutes, 1) if estimated_time_minutes else None
         }
         
     except Exception as e:
@@ -668,11 +679,17 @@ async def process_manual_push(dataset_id: str, actor_config, job_search, raw_job
     try:
         logger.info(f"🚀 Starting manual push - Dataset: {dataset_id}, Actor: {actor_config.actor_key}")
         
-        # Use pre-fetched jobs if available, otherwise fetch them
+        # Use pre-fetched jobs if available, otherwise fetch all using pagination
         if raw_jobs is None:
-            logger.info(f"📥 Fetching data from dataset {dataset_id}")
-            apify_service = ApifyService()
-            raw_jobs = await apify_service.get_dataset_items(dataset_id)
+            logger.info(f"📥 Fetching ALL data from dataset {dataset_id} using pagination...")
+            
+            apify_token = os.getenv("APIFY_API_TOKEN")
+            if not apify_token:
+                logger.error("❌ No Apify token configured for manual push background task")
+                return
+            
+            apify_service = ApifyService(apify_token)
+            raw_jobs = await apify_service.get_all_dataset_items(dataset_id, chunk_size=1000)
             
             if not raw_jobs:
                 logger.warning(f"⚠️  No data found in dataset {dataset_id}")
