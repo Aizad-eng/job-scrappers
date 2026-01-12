@@ -233,20 +233,35 @@
                 
             } catch (error) {
                 console.error('Error loading analytics:', error);
-                alert('Error loading analytics data: ' + error.message);
-                document.getElementById('loading').classList.add('hidden');
+                
+                // Show error message
+                const loadingDiv = document.getElementById('loading');
+                loadingDiv.innerHTML = `
+                    <div class="text-center py-8">
+                        <div class="text-red-600 mb-4">
+                            <svg class="w-12 h-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                            </svg>
+                            Error loading analytics data
+                        </div>
+                        <p class="text-gray-600 mb-4">${error.message}</p>
+                        <button onclick="loadAnalytics()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition">
+                            Try Again
+                        </button>
+                    </div>
+                `;
             }
         }
         
         function updateSummaryCards(totals, period) {
-            document.getElementById('totalJobsFound').textContent = totals.jobs_found.toLocaleString();
-            document.getElementById('totalJobsFiltered').textContent = totals.jobs_filtered.toLocaleString();
-            document.getElementById('totalJobsSent').textContent = totals.jobs_sent.toLocaleString();
-            document.getElementById('totalRuns').textContent = totals.total_runs.toLocaleString();
+            document.getElementById('totalJobsFound').textContent = (totals.jobs_found || 0).toLocaleString();
+            document.getElementById('totalJobsFiltered').textContent = (totals.jobs_filtered || 0).toLocaleString();
+            document.getElementById('totalJobsSent').textContent = (totals.jobs_sent || 0).toLocaleString();
+            document.getElementById('totalRuns').textContent = (totals.total_runs || 0).toLocaleString();
             
-            document.getElementById('filterRate').textContent = `${totals.filter_rate}% filter rate`;
-            document.getElementById('successRate').textContent = `${totals.success_rate}% success rate`;
-            document.getElementById('periodDays').textContent = `${period.days} days`;
+            document.getElementById('filterRate').textContent = `${totals.filter_rate || 0}% filter rate`;
+            document.getElementById('successRate').textContent = `${totals.success_rate || 0}% success rate`;
+            document.getElementById('periodDays').textContent = `${period.days || 0} days`;
         }
         
         function updateDailyChart(dailyData) {
@@ -254,6 +269,11 @@
             
             if (dailyChart) {
                 dailyChart.destroy();
+            }
+            
+            // Handle empty data
+            if (!dailyData || dailyData.length === 0) {
+                dailyData = [];
             }
             
             const labels = dailyData.map(d => new Date(d.date).toLocaleDateString());
@@ -301,6 +321,11 @@
             
             if (platformChart) {
                 platformChart.destroy();
+            }
+            
+            // Handle empty data
+            if (!platformData || platformData.length === 0) {
+                platformData = [];
             }
             
             const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];

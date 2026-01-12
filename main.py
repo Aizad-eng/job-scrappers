@@ -506,6 +506,22 @@ async def get_analytics_overview(
     
     totals = total_query.first()
     
+    # Handle case where no data exists
+    if not totals or totals.total_found is None:
+        totals_dict = {
+            "total_found": 0,
+            "total_filtered": 0,
+            "total_sent": 0,
+            "total_runs": 0
+        }
+    else:
+        totals_dict = {
+            "total_found": totals.total_found or 0,
+            "total_filtered": totals.total_filtered or 0,
+            "total_sent": totals.total_sent or 0,
+            "total_runs": totals.total_runs or 0
+        }
+    
     # Daily breakdown
     daily_query = db.query(
         func.date(JobRun.started_at).label('date'),
@@ -553,12 +569,12 @@ async def get_analytics_overview(
             "days": (end_dt - start_dt).days + 1
         },
         "totals": {
-            "jobs_found": totals.total_found or 0,
-            "jobs_filtered": totals.total_filtered or 0,
-            "jobs_sent": totals.total_sent or 0,
-            "total_runs": totals.total_runs or 0,
-            "filter_rate": round((totals.total_filtered or 0) / max(totals.total_found or 1, 1) * 100, 1),
-            "success_rate": round((totals.total_sent or 0) / max(totals.total_found or 1, 1) * 100, 1)
+            "jobs_found": totals_dict["total_found"],
+            "jobs_filtered": totals_dict["total_filtered"],
+            "jobs_sent": totals_dict["total_sent"],
+            "total_runs": totals_dict["total_runs"],
+            "filter_rate": round(totals_dict["total_filtered"] / max(totals_dict["total_found"], 1) * 100, 1),
+            "success_rate": round(totals_dict["total_sent"] / max(totals_dict["total_found"], 1) * 100, 1)
         },
         "daily": [
             {
