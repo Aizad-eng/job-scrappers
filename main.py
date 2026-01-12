@@ -469,18 +469,24 @@ async def get_analytics_overview(
     if start_date:
         try:
             start_dt = datetime.fromisoformat(start_date)
+            # Set to beginning of day
+            start_dt = start_dt.replace(hour=0, minute=0, second=0, microsecond=0)
         except ValueError:
-            start_dt = datetime.now() - timedelta(days=30)
+            start_dt = datetime.now() - timedelta(days=7)
     else:
-        start_dt = datetime.now() - timedelta(days=30)
+        start_dt = datetime.now() - timedelta(days=7)
     
     if end_date:
         try:
             end_dt = datetime.fromisoformat(end_date)
+            # Set to end of day
+            end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
         except ValueError:
             end_dt = datetime.now()
     else:
         end_dt = datetime.now()
+    
+    logger.info(f"Analytics date range: {start_dt} to {end_dt}")
     
     # Base query filters
     filters = [JobRun.started_at >= start_dt, JobRun.started_at <= end_dt]
@@ -505,6 +511,7 @@ async def get_analytics_overview(
         ).filter(JobRun.started_at >= start_dt, JobRun.started_at <= end_dt)
     
     totals = total_query.first()
+    logger.info(f"Raw totals query result: {totals}")
     
     # Handle case where no data exists
     if not totals or totals.total_found is None:

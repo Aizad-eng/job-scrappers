@@ -11,7 +11,7 @@
         /* Fix chart positioning and prevent layout issues */
         .chart-container {
             position: relative;
-            height: 300px;
+            height: 200px;
             overflow: hidden;
         }
         
@@ -229,13 +229,15 @@
         });
         
         function initializeFilters() {
-            // Set default date range to last 30 days
+            // Set default date range to last 7 days to capture recent runs
             const endDate = new Date();
             const startDate = new Date();
-            startDate.setDate(startDate.getDate() - 30);
+            startDate.setDate(startDate.getDate() - 7);
             
             document.getElementById('endDate').value = endDate.toISOString().split('T')[0];
             document.getElementById('startDate').value = startDate.toISOString().split('T')[0];
+            
+            console.log('Date range set:', startDate.toISOString().split('T')[0], 'to', endDate.toISOString().split('T')[0]);
         }
         
         async function loadAnalytics() {
