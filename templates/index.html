@@ -835,6 +835,8 @@
         // =================================================================
         
         async function editSearch(id) {
+            console.log('editSearch called with id:', id);
+            
             const modal = document.getElementById('editModal');
             modal.classList.remove('hidden');
             modal.classList.add('flex');
@@ -948,6 +950,8 @@
         // =================================================================
         
         async function viewSearchDetails(id) {
+            console.log('viewSearchDetails called with id:', id);
+            
             const modal = document.getElementById('detailsModal');
             modal.classList.remove('hidden');
             modal.classList.add('flex');
@@ -1035,14 +1039,25 @@
         // =================================================================
         
         async function runSearch(id) {
-            if (!confirm('Run this search now?')) return;
+            console.log('runSearch called with id:', id);
+            
+            if (!confirm('Run this search now?')) {
+                console.log('User cancelled run');
+                return;
+            }
+            
+            console.log('Executing search...');
             
             try {
                 const response = await fetch(`/api/searches/${id}/execute`, {
                     method: 'POST'
                 });
                 
+                console.log('Response received:', response);
+                
                 const result = await response.json();
+                
+                console.log('Result:', result);
                 
                 if (result.success) {
                     alert(`Success! Found: ${result.jobs_found}, Filtered: ${result.jobs_filtered}, Sent: ${result.jobs_sent}`);
@@ -1051,11 +1066,14 @@
                     alert('Error: ' + result.error);
                 }
             } catch (error) {
+                console.error('Error in runSearch:', error);
                 alert('Error: ' + error.message);
             }
         }
         
         async function viewRuns(id) {
+            console.log('viewRuns (History) called with id:', id);
+            
             const modal = document.getElementById('historyModal');
             const content = document.getElementById('historyContent');
             
