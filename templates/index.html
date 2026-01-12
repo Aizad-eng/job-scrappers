@@ -670,12 +670,25 @@
         // DYNAMIC FORM GENERATION
         // =================================================================
         
-        const actorSelect = document.getElementById('actorSelect');
-        const actorInputs = document.getElementById('actorInputs');
-        const filterRules = document.getElementById('filterRules');
-        const filterInputs = document.getElementById('filterInputs');
-        
-        actorSelect.addEventListener('change', function() {
+        // Wait for DOM to be ready before setting up form handlers
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🔧 Setting up form handlers...');
+            
+            const actorSelect = document.getElementById('actorSelect');
+            const actorInputs = document.getElementById('actorInputs');
+            const filterRules = document.getElementById('filterRules');
+            const filterInputs = document.getElementById('filterInputs');
+            
+            console.log('Actor select element:', actorSelect);
+            console.log('Actor inputs element:', actorInputs);
+            
+            if (!actorSelect || !actorInputs) {
+                console.error('❌ Required form elements not found!');
+                return;
+            }
+            
+            actorSelect.addEventListener('change', function() {
+                console.log('🎯 Actor selection changed to:', this.value);
             const option = this.options[this.selectedIndex];
             
             if (!option.value) {
@@ -708,6 +721,9 @@
                 filterRules.classList.add('hidden');
             }
         });
+        
+        console.log('✅ Form handlers setup completed');
+        }); // End DOMContentLoaded
         
         function generateInputField(field, prefix = '', value = '') {
             const id = `${prefix}${field.name}`;
