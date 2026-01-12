@@ -446,6 +446,154 @@ async def scheduler_status():
 
 
 # =============================================================================
+# ANALYTICS ENDPOINTS
+# =============================================================================
+
+@app.get("/analytics")
+async def analytics_page(request: Request, db: Session = Depends(get_db)):
+    """Analytics dashboard page"""
+    return templates.TemplateResponse("analytics.html", {"request": request})
+
+@app.get("/api/analytics/overview")
+async def get_analytics_overview(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    platform: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Get consolidated analytics data"""
+    from sqlalchemy import func, and_
+    from datetime import datetime, timedelta
+    
+    # Parse date filters
+    if start_date:
+        try:
+            start_dt = datetime.fromisoformat(start_date)
+        except ValueError:
+            start_dt = datetime.now() - timedelta(days=30)
+    else:
+        start_dt = datetime.now() - timedelta(days=30)
+    
+    if end_date:
+        try:
+            end_dt = datetime.fromisoformat(end_date)
+        except ValueError:
+            end_dt = datetime.now()
+    else:
+        end_dt = datetime.now()
+    
+    # Base query filters
+    filters = [JobRun.started_at >= start_dt, JobRun.started_at <= end_dt]
+    if platform:
+        # Join with JobSearch to filter by actor_key/platform
+        filters.append(JobSearch.actor_key == platform)
+    
+    # Overall totals
+    if platform:
+        total_query = db.query(
+            func.sum(JobRun.jobs_found).label('total_found'),
+            func.sum(JobRun.jobs_filtered).label('total_filtered'), 
+            func.sum(JobRun.jobs_sent).label('total_sent'),
+            func.count(JobRun.id).label('total_runs')
+        ).join(JobSearch, JobRun.job_search_id == JobSearch.id).filter(and_(*filters))
+    else:
+        total_query = db.query(
+            func.sum(JobRun.jobs_found).label('total_found'),
+            func.sum(JobRun.jobs_filtered).label('total_filtered'),
+            func.sum(JobRun.jobs_sent).label('total_sent'),
+            func.count(JobRun.id).label('total_runs')
+        ).filter(JobRun.started_at >= start_dt, JobRun.started_at <= end_dt)
+    
+    totals = total_query.first()
+    
+    # Daily breakdown
+    daily_query = db.query(
+        func.date(JobRun.started_at).label('date'),
+        func.sum(JobRun.jobs_found).label('found'),
+        func.sum(JobRun.jobs_filtered).label('filtered'),
+        func.sum(JobRun.jobs_sent).label('sent'),
+        func.count(JobRun.id).label('runs')
+    )
+    
+    if platform:
+        daily_query = daily_query.join(JobSearch, JobRun.job_search_id == JobSearch.id).filter(and_(*filters))
+    else:
+        daily_query = daily_query.filter(JobRun.started_at >= start_dt, JobRun.started_at <= end_dt)
+    
+    daily_data = daily_query.group_by(func.date(JobRun.started_at)).order_by(func.date(JobRun.started_at)).all()
+    
+    # Platform breakdown
+    platform_query = db.query(
+        JobSearch.actor_key.label('platform'),
+        JobSearch.actor_display_name.label('display_name'),
+        func.sum(JobRun.jobs_found).label('found'),
+        func.sum(JobRun.jobs_filtered).label('filtered'),
+        func.sum(JobRun.jobs_sent).label('sent'),
+        func.count(JobRun.id).label('runs')
+    ).join(JobSearch, JobRun.job_search_id == JobSearch.id).filter(
+        JobRun.started_at >= start_dt, JobRun.started_at <= end_dt
+    ).group_by(JobSearch.actor_key, JobSearch.actor_display_name).order_by(func.sum(JobRun.jobs_found).desc()).all()
+    
+    # Top searches
+    search_query = db.query(
+        JobSearch.name.label('search_name'),
+        JobSearch.actor_key.label('platform'),
+        func.sum(JobRun.jobs_found).label('found'),
+        func.sum(JobRun.jobs_filtered).label('filtered'), 
+        func.sum(JobRun.jobs_sent).label('sent'),
+        func.count(JobRun.id).label('runs')
+    ).join(JobRun, JobSearch.id == JobRun.job_search_id).filter(
+        JobRun.started_at >= start_dt, JobRun.started_at <= end_dt
+    ).group_by(JobSearch.id, JobSearch.name, JobSearch.actor_key).order_by(func.sum(JobRun.jobs_found).desc()).limit(10).all()
+    
+    return {
+        "period": {
+            "start": start_dt.isoformat(),
+            "end": end_dt.isoformat(),
+            "days": (end_dt - start_dt).days + 1
+        },
+        "totals": {
+            "jobs_found": totals.total_found or 0,
+            "jobs_filtered": totals.total_filtered or 0,
+            "jobs_sent": totals.total_sent or 0,
+            "total_runs": totals.total_runs or 0,
+            "filter_rate": round((totals.total_filtered or 0) / max(totals.total_found or 1, 1) * 100, 1),
+            "success_rate": round((totals.total_sent or 0) / max(totals.total_found or 1, 1) * 100, 1)
+        },
+        "daily": [
+            {
+                "date": str(row.date),
+                "jobs_found": row.found or 0,
+                "jobs_filtered": row.filtered or 0, 
+                "jobs_sent": row.sent or 0,
+                "runs": row.runs or 0
+            } for row in daily_data
+        ],
+        "platforms": [
+            {
+                "platform": row.platform,
+                "display_name": row.display_name or row.platform,
+                "jobs_found": row.found or 0,
+                "jobs_filtered": row.filtered or 0,
+                "jobs_sent": row.sent or 0,
+                "runs": row.runs or 0,
+                "filter_rate": round((row.filtered or 0) / max(row.found or 1, 1) * 100, 1),
+                "success_rate": round((row.sent or 0) / max(row.found or 1, 1) * 100, 1)
+            } for row in platform_query
+        ],
+        "top_searches": [
+            {
+                "name": row.search_name,
+                "platform": row.platform, 
+                "jobs_found": row.found or 0,
+                "jobs_filtered": row.filtered or 0,
+                "jobs_sent": row.sent or 0,
+                "runs": row.runs or 0
+            } for row in search_query
+        ]
+    }
+
+# =============================================================================
 # ERROR HANDLING
 # =============================================================================
 

@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Scraper Analytics</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-6">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">Analytics Dashboard</h1>
+                <p class="text-gray-600 mt-1">Consolidated job scraping performance metrics</p>
+            </div>
+            <div class="flex gap-3">
+                <a href="/" class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition">
+                    ← Back to Dashboard
+                </a>
+            </div>
+        </div>
+
+        <!-- Filter Controls -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-lg font-semibold mb-4">Filters</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                    <input type="date" id="startDate" class="w-full border rounded-md px-3 py-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                    <input type="date" id="endDate" class="w-full border rounded-md px-3 py-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Platform</label>
+                    <select id="platformFilter" class="w-full border rounded-md px-3 py-2">
+                        <option value="">All Platforms</option>
+                        <option value="linkedin">LinkedIn</option>
+                        <option value="indeed">Indeed</option>
+                        <option value="fantastic_jobs">Fantastic Jobs</option>
+                    </select>
+                </div>
+                <div class="flex items-end">
+                    <button id="applyFilters" class="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition">
+                        Apply Filters
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading" class="text-center py-8">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <p class="mt-2 text-gray-600">Loading analytics data...</p>
+        </div>
+
+        <!-- Analytics Content -->
+        <div id="analyticsContent" class="hidden">
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <div class="flex items-center">
+                        <div class="p-2 bg-blue-100 rounded-lg">
+                            <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-600">Jobs Found</p>
+                            <p id="totalJobsFound" class="text-2xl font-bold text-gray-900">-</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <div class="flex items-center">
+                        <div class="p-2 bg-red-100 rounded-lg">
+                            <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-600">Jobs Filtered</p>
+                            <p id="totalJobsFiltered" class="text-2xl font-bold text-gray-900">-</p>
+                            <p id="filterRate" class="text-sm text-gray-500">-% filter rate</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <div class="flex items-center">
+                        <div class="p-2 bg-green-100 rounded-lg">
+                            <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-600">Jobs Sent to Clay</p>
+                            <p id="totalJobsSent" class="text-2xl font-bold text-gray-900">-</p>
+                            <p id="successRate" class="text-sm text-gray-500">-% success rate</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <div class="flex items-center">
+                        <div class="p-2 bg-purple-100 rounded-lg">
+                            <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-600">Total Runs</p>
+                            <p id="totalRuns" class="text-2xl font-bold text-gray-900">-</p>
+                            <p id="periodDays" class="text-sm text-gray-500">- days</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Row -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <!-- Daily Trends Chart -->
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-lg font-semibold mb-4">Daily Trends</h3>
+                    <canvas id="dailyChart" height="300"></canvas>
+                </div>
+
+                <!-- Platform Breakdown Chart -->
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-lg font-semibold mb-4">Platform Performance</h3>
+                    <canvas id="platformChart" height="300"></canvas>
+                </div>
+            </div>
+
+            <!-- Tables Row -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Platform Breakdown Table -->
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-lg font-semibold mb-4">Platform Breakdown</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left font-medium text-gray-700">Platform</th>
+                                    <th class="px-4 py-3 text-center font-medium text-gray-700">Found</th>
+                                    <th class="px-4 py-3 text-center font-medium text-gray-700">Sent</th>
+                                    <th class="px-4 py-3 text-center font-medium text-gray-700">Success Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody id="platformTableBody" class="divide-y">
+                                <!-- Platform data will be inserted here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Top Searches Table -->
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-lg font-semibold mb-4">Top Performing Searches</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left font-medium text-gray-700">Search Name</th>
+                                    <th class="px-4 py-3 text-center font-medium text-gray-700">Platform</th>
+                                    <th class="px-4 py-3 text-center font-medium text-gray-700">Found</th>
+                                    <th class="px-4 py-3 text-center font-medium text-gray-700">Sent</th>
+                                </tr>
+                            </thead>
+                            <tbody id="searchTableBody" class="divide-y">
+                                <!-- Search data will be inserted here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let dailyChart, platformChart;
+        
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeFilters();
+            loadAnalytics();
+            
+            document.getElementById('applyFilters').addEventListener('click', loadAnalytics);
+        });
+        
+        function initializeFilters() {
+            // Set default date range to last 30 days
+            const endDate = new Date();
+            const startDate = new Date();
+            startDate.setDate(startDate.getDate() - 30);
+            
+            document.getElementById('endDate').value = endDate.toISOString().split('T')[0];
+            document.getElementById('startDate').value = startDate.toISOString().split('T')[0];
+        }
+        
+        async function loadAnalytics() {
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('analyticsContent').classList.add('hidden');
+            
+            try {
+                const params = new URLSearchParams();
+                
+                const startDate = document.getElementById('startDate').value;
+                const endDate = document.getElementById('endDate').value;
+                const platform = document.getElementById('platformFilter').value;
+                
+                if (startDate) params.append('start_date', startDate);
+                if (endDate) params.append('end_date', endDate);
+                if (platform) params.append('platform', platform);
+                
+                const response = await fetch(`/api/analytics/overview?${params.toString()}`);
+                const data = await response.json();
+                
+                updateSummaryCards(data.totals, data.period);
+                updateDailyChart(data.daily);
+                updatePlatformChart(data.platforms);
+                updatePlatformTable(data.platforms);
+                updateSearchTable(data.top_searches);
+                
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('analyticsContent').classList.remove('hidden');
+                
+            } catch (error) {
+                console.error('Error loading analytics:', error);
+                alert('Error loading analytics data: ' + error.message);
+                document.getElementById('loading').classList.add('hidden');
+            }
+        }
+        
+        function updateSummaryCards(totals, period) {
+            document.getElementById('totalJobsFound').textContent = totals.jobs_found.toLocaleString();
+            document.getElementById('totalJobsFiltered').textContent = totals.jobs_filtered.toLocaleString();
+            document.getElementById('totalJobsSent').textContent = totals.jobs_sent.toLocaleString();
+            document.getElementById('totalRuns').textContent = totals.total_runs.toLocaleString();
+            
+            document.getElementById('filterRate').textContent = `${totals.filter_rate}% filter rate`;
+            document.getElementById('successRate').textContent = `${totals.success_rate}% success rate`;
+            document.getElementById('periodDays').textContent = `${period.days} days`;
+        }
+        
+        function updateDailyChart(dailyData) {
+            const ctx = document.getElementById('dailyChart').getContext('2d');
+            
+            if (dailyChart) {
+                dailyChart.destroy();
+            }
+            
+            const labels = dailyData.map(d => new Date(d.date).toLocaleDateString());
+            
+            dailyChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Jobs Found',
+                            data: dailyData.map(d => d.jobs_found),
+                            borderColor: 'rgb(59, 130, 246)',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            tension: 0.1
+                        },
+                        {
+                            label: 'Jobs Sent',
+                            data: dailyData.map(d => d.jobs_sent),
+                            borderColor: 'rgb(16, 185, 129)',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            tension: 0.1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top'
+                        }
+                    }
+                }
+            });
+        }
+        
+        function updatePlatformChart(platformData) {
+            const ctx = document.getElementById('platformChart').getContext('2d');
+            
+            if (platformChart) {
+                platformChart.destroy();
+            }
+            
+            const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
+            
+            platformChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: platformData.map(p => p.display_name),
+                    datasets: [{
+                        data: platformData.map(p => p.jobs_found),
+                        backgroundColor: colors.slice(0, platformData.length),
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+        
+        function updatePlatformTable(platformData) {
+            const tbody = document.getElementById('platformTableBody');
+            tbody.innerHTML = '';
+            
+            platformData.forEach(platform => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="px-4 py-3 font-medium">${platform.display_name}</td>
+                    <td class="px-4 py-3 text-center">${platform.jobs_found.toLocaleString()}</td>
+                    <td class="px-4 py-3 text-center">${platform.jobs_sent.toLocaleString()}</td>
+                    <td class="px-4 py-3 text-center">
+                        <span class="px-2 py-1 rounded-full text-xs font-medium ${
+                            platform.success_rate > 50 ? 'bg-green-100 text-green-800' : 
+                            platform.success_rate > 25 ? 'bg-yellow-100 text-yellow-800' : 
+                            'bg-red-100 text-red-800'
+                        }">
+                            ${platform.success_rate}%
+                        </span>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+        
+        function updateSearchTable(searchData) {
+            const tbody = document.getElementById('searchTableBody');
+            tbody.innerHTML = '';
+            
+            searchData.forEach(search => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="px-4 py-3 font-medium">${search.name}</td>
+                    <td class="px-4 py-3 text-center">
+                        <span class="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            ${search.platform}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-center">${search.jobs_found.toLocaleString()}</td>
+                    <td class="px-4 py-3 text-center">${search.jobs_sent.toLocaleString()}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+    </script>
+</body>
+</html>
