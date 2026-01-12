@@ -32,29 +32,46 @@ def create_job_run_safe(db, **kwargs):
             # Rollback the failed transaction
             db.rollback()
             
-            # Use raw SQL insert without problematic columns
-            insert_sql = text("""
-                INSERT INTO job_runs 
-                (job_search_id, started_at, completed_at, status, 
-                 jobs_found, jobs_filtered, jobs_sent, error_message, apify_run_id)
-                VALUES 
-                (:job_search_id, :started_at, :completed_at, :status,
-                 :jobs_found, :jobs_filtered, :jobs_sent, :error_message, :apify_run_id)
+            # Check which columns actually exist in the table
+            check_columns_sql = text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'job_runs' 
+                AND column_name IN ('execution_logs', 'apify_dataset_id')
+            """)
+            
+            existing_columns = db.execute(check_columns_sql).fetchall()
+            existing_column_names = [row[0] for row in existing_columns]
+            
+            # Build INSERT statement with only existing columns
+            base_columns = ['job_search_id', 'started_at', 'completed_at', 'status', 
+                           'jobs_found', 'jobs_filtered', 'jobs_sent', 'error_message', 'apify_run_id']
+            
+            # Add optional columns only if they exist
+            all_columns = base_columns.copy()
+            if 'apify_dataset_id' in existing_column_names:
+                all_columns.append('apify_dataset_id')
+            
+            columns_str = ', '.join(all_columns)
+            placeholders_str = ', '.join([f':{col}' for col in all_columns])
+            
+            insert_sql = text(f"""
+                INSERT INTO job_runs ({columns_str})
+                VALUES ({placeholders_str})
                 RETURNING id
             """)
             
-            # Prepare safe parameters (exclude problematic fields)
-            safe_params = {
-                'job_search_id': kwargs.get('job_search_id'),
-                'started_at': kwargs.get('started_at'),
-                'completed_at': kwargs.get('completed_at'),
-                'status': kwargs.get('status', 'running'),
-                'jobs_found': kwargs.get('jobs_found', 0),
-                'jobs_filtered': kwargs.get('jobs_filtered', 0),
-                'jobs_sent': kwargs.get('jobs_sent', 0),
-                'error_message': kwargs.get('error_message'),
-                'apify_run_id': kwargs.get('apify_run_id')
-            }
+            # Prepare parameters for only the columns that exist
+            safe_params = {}
+            for col in all_columns:
+                if col in kwargs:
+                    safe_params[col] = kwargs[col]
+                elif col == 'status':
+                    safe_params[col] = 'running'
+                elif col in ['jobs_found', 'jobs_filtered', 'jobs_sent']:
+                    safe_params[col] = 0
+                else:
+                    safe_params[col] = None
             
             result = db.execute(insert_sql, safe_params)
             run_id = result.fetchone()[0]
