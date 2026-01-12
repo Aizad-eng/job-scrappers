@@ -541,14 +541,15 @@ async def get_analytics_overview(
     # Platform breakdown
     platform_query = db.query(
         JobSearch.actor_key.label('platform'),
-        JobSearch.actor_display_name.label('display_name'),
+        ActorConfig.display_name.label('display_name'),
         func.sum(JobRun.jobs_found).label('found'),
         func.sum(JobRun.jobs_filtered).label('filtered'),
         func.sum(JobRun.jobs_sent).label('sent'),
         func.count(JobRun.id).label('runs')
-    ).join(JobSearch, JobRun.job_search_id == JobSearch.id).filter(
+    ).join(JobSearch, JobRun.job_search_id == JobSearch.id)\
+     .join(ActorConfig, JobSearch.actor_key == ActorConfig.actor_key).filter(
         JobRun.started_at >= start_dt, JobRun.started_at <= end_dt
-    ).group_by(JobSearch.actor_key, JobSearch.actor_display_name).order_by(func.sum(JobRun.jobs_found).desc()).all()
+    ).group_by(JobSearch.actor_key, ActorConfig.display_name).order_by(func.sum(JobRun.jobs_found).desc()).all()
     
     # Top searches
     search_query = db.query(
