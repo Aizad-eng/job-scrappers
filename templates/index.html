@@ -1112,7 +1112,17 @@
             
             try {
                 const response = await fetch(`/api/searches/${id}/runs?limit=20`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const runs = await response.json();
+                console.log('Runs response:', runs, 'Type:', typeof runs, 'isArray:', Array.isArray(runs));
+                
+                if (!Array.isArray(runs)) {
+                    throw new Error(`Expected array, got ${typeof runs}: ${JSON.stringify(runs)}`);
+                }
                 
                 if (runs.length === 0) {
                     content.innerHTML = '<p class="text-gray-500">No runs yet</p>';

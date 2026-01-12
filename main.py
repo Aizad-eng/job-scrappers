@@ -389,7 +389,7 @@ async def test_actor(data: TestActorRequest, db: Session = Depends(get_db)):
 # RUN HISTORY ENDPOINTS
 # =============================================================================
 
-@app.get("/api/searches/{search_id}/runs", response_model=List[JobRunResponse])
+@app.get("/api/searches/{search_id}/runs", response_model=list[JobRunResponse])
 async def get_search_runs(
     search_id: int,
     limit: int = 10,
