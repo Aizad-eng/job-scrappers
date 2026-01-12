@@ -65,8 +65,8 @@ class JobScheduler:
             return
         
         try:
-            # Parse cron schedule
-            trigger = CronTrigger.from_crontab(job_search.cron_schedule)
+            # Parse cron schedule WITH timezone
+            trigger = CronTrigger.from_crontab(job_search.cron_schedule, timezone=SCHEDULER_TIMEZONE)
             
             # Add job to scheduler
             scheduler_job = self.scheduler.add_job(
