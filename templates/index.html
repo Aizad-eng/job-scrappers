@@ -305,13 +305,34 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Schedule (EST)</label>
-                                <select name="cron_schedule" id="editCronSchedule" class="w-full border rounded-md px-3 py-2">
-                                    <option value="0 */6 * * *">Every 6 hours</option>
-                                    <option value="0 */12 * * *">Every 12 hours</option>
-                                    <option value="0 9 * * *">Daily at 9 AM EST</option>
-                                    <option value="0 9 * * 1-5">Weekdays at 9 AM EST</option>
-                                    <option value="0 9 * * 1">Weekly on Monday 9 AM EST</option>
-                                </select>
+                                <div class="space-y-3">
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <select name="frequency" id="editFrequencySelect" class="border rounded-md px-3 py-2">
+                                            <option value="daily">Every day</option>
+                                            <option value="weekdays">Weekdays only</option>
+                                            <option value="weekly">Weekly</option>
+                                        </select>
+                                        <input type="time" name="time" id="editTimeInput" value="09:00" 
+                                               class="border rounded-md px-3 py-2">
+                                    </div>
+                                    
+                                    <!-- Day selector for weekly -->
+                                    <div id="editWeeklyDaySelect" class="hidden">
+                                        <label class="block text-sm text-gray-600 mb-1">Select day of week:</label>
+                                        <select name="weekly_day" id="editWeeklyDayInput" class="w-full border rounded-md px-3 py-2">
+                                            <option value="1">Monday</option>
+                                            <option value="2">Tuesday</option>
+                                            <option value="3">Wednesday</option>
+                                            <option value="4">Thursday</option>
+                                            <option value="5">Friday</option>
+                                            <option value="6">Saturday</option>
+                                            <option value="0">Sunday</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <p id="editSchedulePreview" class="text-xs text-gray-500"></p>
+                                </div>
+                                <input type="hidden" name="cron_schedule" id="editCronSchedule">
                             </div>
                         </div>
 
@@ -473,6 +494,124 @@
         }
         if (weeklyDayInput) {
             weeklyDayInput.addEventListener('change', updateTimeSchedulePreview);
+        }
+
+        // =================================================================
+        // EDIT MODAL SCHEDULE FUNCTIONS  
+        // =================================================================
+        
+        function setupEditScheduleListeners() {
+            const editFrequencySelect = document.getElementById('editFrequencySelect');
+            const editTimeInput = document.getElementById('editTimeInput');
+            const editWeeklyDayInput = document.getElementById('editWeeklyDayInput');
+            
+            if (editFrequencySelect) {
+                editFrequencySelect.addEventListener('change', updateEditTimeScheduleOptions);
+            }
+            if (editTimeInput) {
+                editTimeInput.addEventListener('change', updateEditTimeSchedulePreview);
+            }
+            if (editWeeklyDayInput) {
+                editWeeklyDayInput.addEventListener('change', updateEditTimeSchedulePreview);
+            }
+        }
+
+        function updateEditTimeScheduleOptions() {
+            const editFrequencySelect = document.getElementById('editFrequencySelect');
+            const editWeeklyDaySelect = document.getElementById('editWeeklyDaySelect');
+            
+            const freq = editFrequencySelect.value;
+            
+            if (freq === 'weekly') {
+                editWeeklyDaySelect.classList.remove('hidden');
+            } else {
+                editWeeklyDaySelect.classList.add('hidden');
+            }
+            
+            updateEditTimeSchedulePreview();
+        }
+
+        function updateEditTimeSchedulePreview() {
+            const editSchedulePreview = document.getElementById('editSchedulePreview');
+            const editCronSchedule = document.getElementById('editCronSchedule');
+            
+            if (!editSchedulePreview) return;
+            
+            const cron = buildEditTimeBasedCron();
+            editCronSchedule.value = cron;
+            
+            try {
+                editSchedulePreview.textContent = cronstrue.toString(cron);
+            } catch (e) {
+                editSchedulePreview.textContent = cron;
+            }
+        }
+
+        function buildEditTimeBasedCron() {
+            const editTimeInput = document.getElementById('editTimeInput');
+            const editFrequencySelect = document.getElementById('editFrequencySelect');
+            const editWeeklyDayInput = document.getElementById('editWeeklyDayInput');
+            
+            const time = editTimeInput.value.split(':');
+            const hour = parseInt(time[0]);
+            const minute = parseInt(time[1]);
+            const freq = editFrequencySelect.value;
+            
+            switch (freq) {
+                case 'daily':
+                    return `${minute} ${hour} * * *`;
+                
+                case 'weekdays':
+                    return `${minute} ${hour} * * 1-5`;
+                
+                case 'weekly':
+                    const day = editWeeklyDayInput.value;
+                    return `${minute} ${hour} * * ${day}`;
+                
+                default:
+                    return `${minute} ${hour} * * *`;
+            }
+        }
+
+        function populateEditScheduleFromCron(cron) {
+            const editFrequencySelect = document.getElementById('editFrequencySelect');
+            const editTimeInput = document.getElementById('editTimeInput');
+            const editWeeklyDayInput = document.getElementById('editWeeklyDayInput');
+            const editCronSchedule = document.getElementById('editCronSchedule');
+            const editWeeklyDaySelect = document.getElementById('editWeeklyDaySelect');
+            
+            // Set hidden cron field
+            editCronSchedule.value = cron;
+            
+            // Parse cron: minute hour day month weekday
+            const parts = cron.split(' ');
+            if (parts.length !== 5) return;
+            
+            const [minute, hour, day, month, weekday] = parts;
+            
+            // Set time
+            const h = hour.padStart(2, '0');
+            const m = minute.padStart(2, '0');
+            editTimeInput.value = `${h}:${m}`;
+            
+            // Determine frequency and set selects
+            if (weekday === '1-5') {
+                // Weekdays
+                editFrequencySelect.value = 'weekdays';
+                editWeeklyDaySelect.classList.add('hidden');
+            } else if (weekday !== '*') {
+                // Specific day (weekly)
+                editFrequencySelect.value = 'weekly';
+                editWeeklyDayInput.value = weekday;
+                editWeeklyDaySelect.classList.remove('hidden');
+            } else {
+                // Daily
+                editFrequencySelect.value = 'daily';
+                editWeeklyDaySelect.classList.add('hidden');
+            }
+            
+            // Update preview
+            updateEditTimeSchedulePreview();
         }
 
         // =================================================================
@@ -684,8 +823,10 @@
                 // Populate basic fields
                 document.getElementById('editId').value = search.id;
                 document.getElementById('editName').value = search.name;
-                document.getElementById('editCronSchedule').value = search.cron_schedule;
                 document.getElementById('editClayWebhook').value = search.clay_webhook_url;
+                
+                // Parse and populate schedule from cron
+                populateEditScheduleFromCron(search.cron_schedule);
                 document.getElementById('editBatchSize').value = search.batch_size;
                 document.getElementById('editBatchInterval').value = search.batch_interval_ms;
                 document.getElementById('editIsActive').checked = search.is_active;
@@ -710,6 +851,9 @@
                     }).join('');
                     document.getElementById('editFilterInputs').innerHTML = filterFields;
                 }
+                
+                // Setup edit modal schedule event listeners
+                setupEditScheduleListeners();
                 
             } catch (error) {
                 alert('Error loading search: ' + error.message);
