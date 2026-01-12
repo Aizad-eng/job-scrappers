@@ -70,16 +70,20 @@ def create_job_run_safe(db, **kwargs):
             """)
             
             # Prepare parameters for only the columns that exist
+            from datetime import datetime
+            
             safe_params = {}
             for col in all_columns:
-                if col in kwargs:
+                if col in kwargs and kwargs[col] is not None:
                     safe_params[col] = kwargs[col]
                 elif col == 'status':
-                    safe_params[col] = 'running'
+                    safe_params[col] = kwargs.get('status', 'running')
+                elif col == 'started_at':
+                    safe_params[col] = kwargs.get('started_at', datetime.utcnow())
                 elif col in ['jobs_found', 'jobs_filtered', 'jobs_sent']:
-                    safe_params[col] = 0
+                    safe_params[col] = kwargs.get(col, 0)
                 else:
-                    safe_params[col] = None
+                    safe_params[col] = kwargs.get(col)
             
             result = db.execute(insert_sql, safe_params)
             run_id = result.fetchone()[0]

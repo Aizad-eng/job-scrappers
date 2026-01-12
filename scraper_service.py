@@ -58,6 +58,7 @@ class ScraperService:
         job_run = create_job_run_safe(
             self.db,
             job_search_id=job_search.id,
+            started_at=datetime.utcnow(),
             status="running"
         )
         

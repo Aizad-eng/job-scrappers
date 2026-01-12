@@ -415,8 +415,14 @@ async def get_search_runs(
             fresh_db = SessionLocal()
             try:
                 result = fresh_db.execute(text("""
-                    SELECT id, job_search_id, started_at, completed_at, status,
-                           jobs_found, jobs_filtered, jobs_sent, error_message,
+                    SELECT id, job_search_id, 
+                           COALESCE(started_at, NOW()) as started_at, 
+                           completed_at, 
+                           COALESCE(status, 'unknown') as status,
+                           COALESCE(jobs_found, 0) as jobs_found, 
+                           COALESCE(jobs_filtered, 0) as jobs_filtered, 
+                           COALESCE(jobs_sent, 0) as jobs_sent, 
+                           error_message,
                            apify_run_id, 
                            CASE WHEN EXISTS (
                                SELECT 1 FROM information_schema.columns 
@@ -425,7 +431,7 @@ async def get_search_runs(
                            NULL as execution_logs
                     FROM job_runs 
                     WHERE job_search_id = :search_id 
-                    ORDER BY started_at DESC 
+                    ORDER BY COALESCE(started_at, NOW()) DESC 
                     LIMIT :limit
                 """), {"search_id": search_id, "limit": limit})
                 
