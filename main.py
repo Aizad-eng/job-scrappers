@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
+from pydantic import BaseModel, Field
 
 from database import init_db, get_db
 from models import JobSearch, JobRun, ScrapedJob, ActorConfig
