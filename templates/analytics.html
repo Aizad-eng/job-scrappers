@@ -222,6 +222,8 @@
                 const response = await fetch(`/api/analytics/overview?${params.toString()}`);
                 const data = await response.json();
                 
+                console.log('Analytics data received:', data);
+                
                 updateSummaryCards(data.totals, data.period);
                 updateDailyChart(data.daily);
                 updatePlatformChart(data.platforms);
@@ -273,7 +275,33 @@
             
             // Handle empty data
             if (!dailyData || dailyData.length === 0) {
-                dailyData = [];
+                // Create empty chart with message
+                dailyChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: ['No Data'],
+                        datasets: [{
+                            label: 'No data available',
+                            data: [0],
+                            borderColor: 'rgb(156, 163, 175)',
+                            backgroundColor: 'rgba(156, 163, 175, 0.1)',
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            title: {
+                                display: true,
+                                text: 'No data available for selected period'
+                            }
+                        }
+                    }
+                });
+                return;
             }
             
             const labels = dailyData.map(d => new Date(d.date).toLocaleDateString());
@@ -325,7 +353,32 @@
             
             // Handle empty data
             if (!platformData || platformData.length === 0) {
-                platformData = [];
+                // Create empty chart with message
+                platformChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['No Data'],
+                        datasets: [{
+                            data: [1],
+                            backgroundColor: ['#E5E7EB'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            title: {
+                                display: true,
+                                text: 'No platform data available'
+                            }
+                        }
+                    }
+                });
+                return;
             }
             
             const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
@@ -356,6 +409,17 @@
             const tbody = document.getElementById('platformTableBody');
             tbody.innerHTML = '';
             
+            if (!platformData || platformData.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="px-4 py-8 text-center text-gray-500">
+                            No platform data available for selected period
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
             platformData.forEach(platform => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
@@ -379,6 +443,17 @@
         function updateSearchTable(searchData) {
             const tbody = document.getElementById('searchTableBody');
             tbody.innerHTML = '';
+            
+            if (!searchData || searchData.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="px-4 py-8 text-center text-gray-500">
+                            No search data available for selected period
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
             
             searchData.forEach(search => {
                 const row = document.createElement('tr');
