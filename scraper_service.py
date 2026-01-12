@@ -184,6 +184,9 @@ class ScraperService:
             return {
                 "success": False,
                 "run_id": job_run.id,
+                "jobs_found": 0,
+                "jobs_filtered": 0,
+                "jobs_sent": 0,
                 "error": str(e)
             }
     

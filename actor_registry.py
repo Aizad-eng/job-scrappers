@@ -39,7 +39,7 @@ SEED_ACTORS = {
         
         # How to build the Apify input payload
         "input_template": {
-            "urls": "{{urls}}",
+            "urls": "{{urls_array}}",
             "count": "{{max_results}}",
             "scrapeCompany": "{{scrape_company}}"
         },
