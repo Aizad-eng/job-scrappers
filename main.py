@@ -22,6 +22,8 @@ from models import JobSearch, JobRun, ScrapedJob, ActorConfig
 from actor_registry import ActorRegistry, SEED_ACTORS
 from scraper_service import ScraperService
 from scheduler_service import scheduler, SchedulerService
+from apify_service import ApifyService
+from clay_service import ClayService
 from schemas import (
     JobSearchCreate, JobSearchUpdate, JobSearchResponse, JobSearchListResponse,
     JobRunResponse, JobRunDetailResponse,
