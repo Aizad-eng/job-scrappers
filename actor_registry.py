@@ -27,6 +27,7 @@ SEED_ACTORS = {
         "actor_id": "curious_coder~linkedin-jobs-scraper",
         "default_timeout_minutes": 15,
         "default_max_results": 1000,
+        "schedule_type": "custom",  # Allows custom date/time scheduling
         
         # What inputs does this actor accept?
         "input_schema": [
@@ -94,6 +95,7 @@ SEED_ACTORS = {
         "actor_id": "curious_coder~indeed-scraper",
         "default_timeout_minutes": 35,
         "default_max_results": 200,
+        "schedule_type": "custom",  # Allows custom date/time scheduling
         
         "input_schema": [
             {"name": "search_url", "type": "url", "label": "Search URL", "required": True,
@@ -159,6 +161,7 @@ SEED_ACTORS = {
         "actor_id": "fantastic-jobs~advanced-linkedin-job-search-api",
         "default_timeout_minutes": 20,
         "default_max_results": 100,
+        "schedule_type": "simple",  # Simple dropdown only
         
         "input_schema": [
             {"name": "title_search", "type": "textarea", "label": "Job Titles", "required": True,
@@ -295,6 +298,7 @@ class ActorRegistry:
                 existing.output_mapping = config.get("output_mapping", {})
                 existing.filter_config = config.get("filter_config", {})
                 existing.clay_template = config.get("clay_template", {})
+                existing.schedule_type = config.get("schedule_type", "simple")
                 logger.info(f"Updated actor config: {actor_key}")
             else:
                 # Create new
@@ -308,7 +312,8 @@ class ActorRegistry:
                     input_template=config.get("input_template", {}),
                     output_mapping=config.get("output_mapping", {}),
                     filter_config=config.get("filter_config", {}),
-                    clay_template=config.get("clay_template", {})
+                    clay_template=config.get("clay_template", {}),
+                    schedule_type=config.get("schedule_type", "simple")
                 )
                 self.db.add(new_actor)
                 logger.info(f"Created actor config: {actor_key}")
