@@ -11,7 +11,7 @@ Workflow:
 
 import logging
 from datetime import datetime
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 from sqlalchemy.orm import Session
 
 from models import JobSearch, JobRun, ScrapedJob, ActorConfig
@@ -335,7 +335,7 @@ class ScraperService:
     async def _handle_progressive_data(
         self,
         job_run: JobRun,
-        partial_jobs: List[Dict],
+        partial_jobs: list[dict],
         actor_config: ActorConfig,
         job_search: JobSearch,
         is_final: bool
