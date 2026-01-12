@@ -97,10 +97,16 @@ async def index(request: Request, db: Session = Depends(get_db)):
     
     searches = db.query(JobSearch).order_by(JobSearch.created_at.desc()).all()
     
-    # Enrich with actor display names
+    # Enrich with actor display names and next run times
     actor_map = {a.actor_key: a.display_name for a in actors}
     for search in searches:
         search.actor_display_name = actor_map.get(search.actor_key, search.actor_key)
+        # Get actual next run time from scheduler
+        if search.is_active:
+            next_run = scheduler.get_next_run(search.id)
+            search.next_run_time = next_run
+        else:
+            search.next_run_time = None
     
     return templates.TemplateResponse("index.html", {
         "request": request,

@@ -202,8 +202,10 @@
                                 <span class="cron-human" data-cron="{{ search.cron_schedule }}">{{ search.cron_schedule }}</span>
                             </td>
                             <td class="px-4 py-3 text-sm text-gray-600">
-                                {% if search.is_active %}
-                                <span class="next-run text-blue-600" data-cron="{{ search.cron_schedule }}">Calculating...</span>
+                                {% if search.is_active and search.next_run_time %}
+                                <span class="text-blue-600">{{ search.next_run_time.strftime('%b %d, %I:%M %p') }} EST</span>
+                                {% elif search.is_active %}
+                                <span class="text-orange-600">Loading...</span>
                                 {% else %}
                                 <span class="text-gray-400">Paused</span>
                                 {% endif %}
@@ -474,76 +476,8 @@
         // NEXT RUN CALCULATION
         // =================================================================
         
-        function getNextCronRun(cronExpr) {
-            // Simple cron parser for common patterns - returns time in EST
-            const parts = cronExpr.split(' ');
-            if (parts.length !== 5) return 'Invalid';
-            
-            const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
-            
-            // Get current time in EST
-            const now = new Date();
-            const estNow = new Date(now.toLocaleString('en-US', { timeZone: EST_TIMEZONE }));
-            let next = new Date(estNow);
-            
-            // Handle common patterns
-            if (hour.startsWith('*/')) {
-                // Every X hours
-                const interval = parseInt(hour.substring(2));
-                next.setMinutes(parseInt(minute) || 0);
-                next.setSeconds(0);
-                next.setMilliseconds(0);
-                
-                // Find next occurrence
-                while (next <= estNow) {
-                    next.setHours(next.getHours() + interval);
-                }
-            } else if (hour !== '*') {
-                // Specific hour
-                const targetHour = parseInt(hour);
-                const targetMinute = parseInt(minute) || 0;
-                
-                next.setHours(targetHour, targetMinute, 0, 0);
-                
-                if (next <= estNow) {
-                    next.setDate(next.getDate() + 1);
-                }
-                
-                // Handle weekday restrictions
-                if (dayOfWeek === '1-5') {
-                    while (next.getDay() === 0 || next.getDay() === 6) {
-                        next.setDate(next.getDate() + 1);
-                    }
-                } else if (dayOfWeek === '1') {
-                    while (next.getDay() !== 1) {
-                        next.setDate(next.getDate() + 1);
-                    }
-                } else if (dayOfWeek !== '*') {
-                    // Handle specific days like "0,3,5"
-                    const allowedDays = dayOfWeek.split(',').map(d => parseInt(d));
-                    while (!allowedDays.includes(next.getDay())) {
-                        next.setDate(next.getDate() + 1);
-                    }
-                }
-            }
-            
-            return next.toLocaleString('en-US', { 
-                month: 'short', 
-                day: 'numeric', 
-                hour: 'numeric', 
-                minute: '2-digit',
-                timeZone: EST_TIMEZONE
-            }) + ' EST';
-        }
-        
-        // Calculate next runs on page load
+        // Convert cron to human readable on page load
         document.addEventListener('DOMContentLoaded', function() {
-            document.querySelectorAll('.next-run').forEach(el => {
-                const cron = el.dataset.cron;
-                el.textContent = getNextCronRun(cron);
-            });
-            
-            // Convert cron to human readable
             document.querySelectorAll('.cron-human').forEach(el => {
                 const cron = el.dataset.cron;
                 try {
