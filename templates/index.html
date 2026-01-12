@@ -1161,10 +1161,11 @@
                                                     Fetch Dataset
                                                 </button>
                                             ` : ''}
-                                            ${(run.jobs_found > 0 && run.jobs_filtered >= 0) ? `
+                                            ${(run.jobs_found > 0 && (run.jobs_sent < run.jobs_found - run.jobs_filtered)) ? `
                                                 <button onclick="pushToClay(${run.id})" 
-                                                        class="text-purple-600 hover:text-purple-800 text-xs font-medium">
-                                                    Push to Clay
+                                                        class="text-purple-600 hover:text-purple-800 text-xs font-medium"
+                                                        title="Send ${run.jobs_found - run.jobs_filtered - run.jobs_sent} unsent jobs to Clay">
+                                                    Push to Clay (${run.jobs_found - run.jobs_filtered - run.jobs_sent})
                                                 </button>
                                             ` : ''}
                                         </div>
@@ -1195,21 +1196,32 @@
             
             try {
                 const response = await fetch(`/api/runs/${runId}`);
-                const runData = await response.json();
                 
-                if (runData.run.execution_logs) {
-                    content.innerHTML = runData.run.execution_logs;
-                } else if (runData.run.error_message) {
-                    content.innerHTML = `❌ ERROR: ${runData.run.error_message}\n\nNo detailed logs available for this run.`;
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const runData = await response.json();
+                console.log('Run data structure:', runData); // Debug log
+                
+                // Handle different possible response structures
+                const run = runData.run || runData;
+                
+                if (run && run.execution_logs) {
+                    content.innerHTML = run.execution_logs;
+                } else if (run && run.error_message) {
+                    content.innerHTML = `❌ ERROR: ${run.error_message}\n\nNo detailed logs available for this run.`;
                 } else {
-                    content.innerHTML = 'No logs available for this run.';
+                    content.innerHTML = `No logs available for this run.\n\nResponse structure: ${JSON.stringify(runData, null, 2)}`;
                 }
                 
                 // Update modal title with run info
                 const title = modal.querySelector('h3');
-                title.textContent = `Execution Logs - Run #${runId} (${runData.run.status})`;
+                const status = (run && run.status) || 'unknown';
+                title.textContent = `Execution Logs - Run #${runId} (${status})`;
                 
             } catch (error) {
+                console.error('Error in viewRunLogs:', error);
                 content.innerHTML = `Error loading logs: ${error.message}`;
             }
         }
