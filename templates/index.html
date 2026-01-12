@@ -189,12 +189,16 @@
                                             class="text-green-600 hover:text-green-800 text-sm font-medium">
                                         Run
                                     </button>
+                                    <button onclick="viewSearchDetails({{ search.id }})"
+                                            class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                        View
+                                    </button>
                                     <button onclick="editSearch({{ search.id }})"
                                             class="text-yellow-600 hover:text-yellow-800 text-sm font-medium">
                                         Edit
                                     </button>
                                     <button onclick="viewRuns({{ search.id }})"
-                                            class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                            class="text-gray-600 hover:text-gray-800 text-sm font-medium">
                                         History
                                     </button>
                                     <button onclick="duplicateSearch({{ search.id }})"
@@ -229,6 +233,54 @@
                 </div>
                 <div id="historyContent" class="p-4 overflow-y-auto max-h-[60vh]">
                     Loading...
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick View Modal -->
+        <div id="detailsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+            <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] overflow-hidden">
+                <div class="p-4 border-b flex justify-between items-center">
+                    <h3 class="text-lg font-semibold">Job Search Details</h3>
+                    <button onclick="closeDetailsModal()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+                </div>
+                <div id="detailsContent" class="p-6 overflow-y-auto max-h-[60vh]">
+                    <div class="space-y-6">
+                        <!-- Basic Info -->
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <h4 class="text-lg font-medium text-gray-800 mb-3">Basic Information</h4>
+                            <div class="grid grid-cols-2 gap-4 text-sm">
+                                <div><span class="font-medium">Name:</span> <span id="detail-name"></span></div>
+                                <div><span class="font-medium">Platform:</span> <span id="detail-platform"></span></div>
+                                <div><span class="font-medium">Schedule:</span> <span id="detail-schedule"></span></div>
+                                <div><span class="font-medium">Status:</span> <span id="detail-status"></span></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Actor Inputs -->
+                        <div class="bg-blue-50 rounded-lg p-4">
+                            <h4 class="text-lg font-medium text-gray-800 mb-3">Search Configuration</h4>
+                            <div id="detail-inputs" class="grid grid-cols-1 gap-3 text-sm"></div>
+                        </div>
+                        
+                        <!-- Filter Rules -->
+                        <div class="bg-yellow-50 rounded-lg p-4">
+                            <h4 class="text-lg font-medium text-gray-800 mb-3">Filter Rules</h4>
+                            <div id="detail-filters" class="grid grid-cols-1 gap-3 text-sm"></div>
+                        </div>
+                        
+                        <!-- Output Configuration -->
+                        <div class="bg-green-50 rounded-lg p-4">
+                            <h4 class="text-lg font-medium text-gray-800 mb-3">Output Configuration</h4>
+                            <div class="space-y-2 text-sm">
+                                <div><span class="font-medium">Clay Webhook:</span> <span id="detail-webhook" class="break-all text-blue-600"></span></div>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div><span class="font-medium">Batch Size:</span> <span id="detail-batch-size"></span></div>
+                                    <div><span class="font-medium">Batch Interval:</span> <span id="detail-batch-interval"></span>ms</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -725,6 +777,93 @@
         });
         
         // =================================================================
+        // QUICK VIEW FUNCTIONALITY
+        // =================================================================
+        
+        async function viewSearchDetails(id) {
+            const modal = document.getElementById('detailsModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            
+            try {
+                const response = await fetch(`/api/searches/${id}`);
+                const search = await response.json();
+                
+                // Get actor config
+                const actorConfig = actorConfigs[search.actor_key];
+                
+                // Populate basic info
+                document.getElementById('detail-name').textContent = search.name;
+                document.getElementById('detail-platform').textContent = search.actor_display_name || search.actor_key;
+                document.getElementById('detail-schedule').textContent = search.cron_schedule;
+                document.getElementById('detail-status').textContent = search.is_active ? 'Active' : 'Inactive';
+                document.getElementById('detail-webhook').textContent = search.clay_webhook_url;
+                document.getElementById('detail-batch-size').textContent = search.batch_size;
+                document.getElementById('detail-batch-interval').textContent = search.batch_interval_ms;
+                
+                // Populate actor inputs
+                const inputsContainer = document.getElementById('detail-inputs');
+                inputsContainer.innerHTML = '';
+                
+                if (search.actor_inputs && Object.keys(search.actor_inputs).length > 0) {
+                    Object.entries(search.actor_inputs).forEach(([key, value]) => {
+                        const div = document.createElement('div');
+                        div.innerHTML = `<span class="font-medium">${formatFieldName(key)}:</span> <span class="text-gray-700">${formatFieldValue(value)}</span>`;
+                        inputsContainer.appendChild(div);
+                    });
+                } else {
+                    inputsContainer.innerHTML = '<p class="text-gray-500">No input configuration</p>';
+                }
+                
+                // Populate filter rules
+                const filtersContainer = document.getElementById('detail-filters');
+                filtersContainer.innerHTML = '';
+                
+                if (search.filter_rules && Object.keys(search.filter_rules).length > 0) {
+                    Object.entries(search.filter_rules).forEach(([key, value]) => {
+                        if (value) {
+                            const div = document.createElement('div');
+                            div.innerHTML = `<span class="font-medium">${formatFieldName(key)}:</span> <span class="text-gray-700">${formatFieldValue(value)}</span>`;
+                            filtersContainer.appendChild(div);
+                        }
+                    });
+                }
+                
+                if (filtersContainer.children.length === 0) {
+                    filtersContainer.innerHTML = '<p class="text-gray-500">No filters applied</p>';
+                }
+                
+            } catch (error) {
+                console.error('Error loading search details:', error);
+                document.getElementById('detailsContent').innerHTML = `
+                    <div class="text-red-500 text-center p-4">
+                        Error loading search details: ${error.message}
+                    </div>
+                `;
+            }
+        }
+        
+        function closeDetailsModal() {
+            const modal = document.getElementById('detailsModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+        
+        function formatFieldName(fieldName) {
+            return fieldName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+        
+        function formatFieldValue(value) {
+            if (Array.isArray(value)) {
+                return value.join(', ');
+            }
+            if (typeof value === 'string' && value.length > 100) {
+                return value.substring(0, 100) + '...';
+            }
+            return value;
+        }
+        
+        // =================================================================
         // OTHER ACTIONS
         // =================================================================
         
@@ -842,6 +981,7 @@
             if (e.key === 'Escape') {
                 closeModal();
                 closeEditModal();
+                closeDetailsModal();
             }
         });
     </script>
