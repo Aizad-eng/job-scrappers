@@ -85,10 +85,13 @@ class ApifyService:
         # Get the user's inputs for this search
         user_inputs = job_search.actor_inputs or {}
         
+        # Convert string inputs to appropriate types based on input schema
+        converted_inputs = self._convert_input_types(user_inputs, actor_config.input_schema)
+        
         # Add defaults
         variables = {
-            "max_results": user_inputs.get("max_results", actor_config.default_max_results),
-            **user_inputs
+            "max_results": converted_inputs.get("max_results", actor_config.default_max_results),
+            **converted_inputs
         }
         
         # Handle filter rules that go into the payload (like employee count filters)
@@ -105,6 +108,51 @@ class ApifyService:
         payload = clean_payload(payload)
         
         return payload
+    
+    def _convert_input_types(self, user_inputs: Dict, input_schema: List[Dict]) -> Dict:
+        """
+        Convert form string inputs to appropriate types based on schema.
+        
+        Args:
+            user_inputs: Raw form data (all strings)
+            input_schema: Schema defining expected types
+        
+        Returns:
+            Dict with properly typed values
+        """
+        converted = {}
+        
+        # Create a mapping of field names to their expected types
+        type_map = {}
+        for field in input_schema:
+            type_map[field["name"]] = field.get("type", "text")
+        
+        for key, value in user_inputs.items():
+            field_type = type_map.get(key, "text")
+            
+            if value is None or value == "":
+                converted[key] = None
+            elif field_type == "number":
+                try:
+                    # Try integer first, then float
+                    converted[key] = int(value) if str(value).isdigit() else float(value)
+                except (ValueError, TypeError):
+                    converted[key] = value  # Keep as string if conversion fails
+            elif field_type == "boolean":
+                # Handle various boolean representations from forms
+                if isinstance(value, bool):
+                    converted[key] = value
+                elif str(value).lower() in ('true', '1', 'on', 'yes'):
+                    converted[key] = True
+                elif str(value).lower() in ('false', '0', 'off', 'no', ''):
+                    converted[key] = False
+                else:
+                    converted[key] = bool(value)
+            else:
+                # Keep as string for text, textarea, url, select, etc.
+                converted[key] = value
+        
+        return converted
     
     async def _wait_for_completion(
         self,
