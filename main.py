@@ -403,38 +403,52 @@ async def get_search_runs(
         
         return [JobRunResponse.model_validate(r) for r in runs]
     except Exception as e:
-        if "execution_logs does not exist" in str(e):
-            # Fallback query without execution_logs column for migration compatibility
+        if "execution_logs does not exist" in str(e) or "InFailedSqlTransaction" in str(e):
+            # Rollback the failed transaction and create a new one
+            db.rollback()
+            db.close()
+            
+            # Create a fresh database session for the fallback query
+            from database import SessionLocal
             from sqlalchemy import text
-            result = db.execute(text("""
-                SELECT id, job_search_id, started_at, completed_at, status,
-                       jobs_found, jobs_filtered, jobs_sent, error_message,
-                       apify_run_id, apify_dataset_id,
-                       NULL as execution_logs
-                FROM job_runs 
-                WHERE job_search_id = :search_id 
-                ORDER BY started_at DESC 
-                LIMIT :limit
-            """), {"search_id": search_id, "limit": limit})
             
-            runs = []
-            for row in result:
-                run_dict = {
-                    "id": row[0],
-                    "job_search_id": row[1], 
-                    "started_at": row[2],
-                    "completed_at": row[3],
-                    "status": row[4] or "unknown",
-                    "jobs_found": row[5] or 0,
-                    "jobs_filtered": row[6] or 0, 
-                    "jobs_sent": row[7] or 0,
-                    "error_message": row[8],
-                    "execution_logs": None,  # Will be available after migration
-                    "apify_run_id": row[9]
-                }
-                runs.append(JobRunResponse.model_validate(run_dict))
-            
-            return runs
+            fresh_db = SessionLocal()
+            try:
+                result = fresh_db.execute(text("""
+                    SELECT id, job_search_id, started_at, completed_at, status,
+                           jobs_found, jobs_filtered, jobs_sent, error_message,
+                           apify_run_id, 
+                           CASE WHEN EXISTS (
+                               SELECT 1 FROM information_schema.columns 
+                               WHERE table_name = 'job_runs' AND column_name = 'apify_dataset_id'
+                           ) THEN apify_dataset_id ELSE NULL END as apify_dataset_id,
+                           NULL as execution_logs
+                    FROM job_runs 
+                    WHERE job_search_id = :search_id 
+                    ORDER BY started_at DESC 
+                    LIMIT :limit
+                """), {"search_id": search_id, "limit": limit})
+                
+                runs = []
+                for row in result:
+                    run_dict = {
+                        "id": row[0],
+                        "job_search_id": row[1], 
+                        "started_at": row[2],
+                        "completed_at": row[3],
+                        "status": row[4] or "unknown",
+                        "jobs_found": row[5] or 0,
+                        "jobs_filtered": row[6] or 0, 
+                        "jobs_sent": row[7] or 0,
+                        "error_message": row[8],
+                        "execution_logs": None,  # Will be available after migration
+                        "apify_run_id": row[9]
+                    }
+                    runs.append(JobRunResponse.model_validate(run_dict))
+                
+                return runs
+            finally:
+                fresh_db.close()
         else:
             raise
 
