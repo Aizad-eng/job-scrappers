@@ -34,6 +34,7 @@ class ActorConfigResponse(BaseModel):
     default_max_results: int
     input_schema: List[ActorInputField]
     is_active: bool
+    schedule_type: str = "simple"
     
     class Config:
         from_attributes = True
