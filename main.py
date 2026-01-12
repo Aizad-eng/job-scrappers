@@ -19,6 +19,7 @@ from database import init_db, get_db
 from models import JobSearch, JobRun, ScrapedJob, ActorConfig
 from actor_registry import ActorRegistry, SEED_ACTORS
 from scraper_service import ScraperService
+from scheduler_service import scheduler, SchedulerService
 from schemas import (
     JobSearchCreate, JobSearchUpdate, JobSearchResponse, JobSearchListResponse,
     JobRunResponse, JobRunDetailResponse,
@@ -46,12 +47,12 @@ templates = Jinja2Templates(directory="templates")
 
 
 # =============================================================================
-# STARTUP
+# STARTUP & SHUTDOWN
 # =============================================================================
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize database and seed actor configs"""
+    """Initialize database, seed actor configs, and start scheduler"""
     logger.info("Starting Job Scraper API...")
     
     # Initialize database
@@ -67,7 +68,21 @@ async def startup_event():
     finally:
         db.close()
     
+    # Start the scheduler
+    scheduler.start()
+    
+    # Load all active job searches into scheduler
+    scheduler.load_all_jobs()
+    
     logger.info("Job Scraper API ready!")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Shutdown scheduler"""
+    logger.info("Shutting down Job Scraper API...")
+    scheduler.shutdown()
+    logger.info("Scheduler stopped")
 
 
 # =============================================================================
@@ -218,6 +233,10 @@ async def create_search(data: JobSearchCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(search)
     
+    # Add to scheduler if active
+    if search.is_active:
+        scheduler.add_job(search.id, search.cron_schedule, search.name)
+    
     response = JobSearchResponse.model_validate(search)
     response.actor_display_name = actor.display_name
     
@@ -241,6 +260,9 @@ async def update_search(search_id: int, data: JobSearchUpdate, db: Session = Dep
     db.commit()
     db.refresh(search)
     
+    # Update scheduler
+    scheduler.update_job(search.id, search.cron_schedule, search.name, search.is_active)
+    
     return JobSearchResponse.model_validate(search)
 
 
@@ -252,10 +274,15 @@ async def delete_search(search_id: int, db: Session = Depends(get_db)):
     if not search:
         raise HTTPException(status_code=404, detail="Job search not found")
     
+    name = search.name
+    
+    # Remove from scheduler first
+    scheduler.remove_job(search_id)
+    
     db.delete(search)
     db.commit()
     
-    return SuccessResponse(message=f"Deleted job search '{search.name}'")
+    return SuccessResponse(message=f"Deleted job search '{name}'")
 
 
 @app.post("/api/searches/{search_id}/duplicate", response_model=JobSearchResponse)
@@ -266,7 +293,7 @@ async def duplicate_search(search_id: int, db: Session = Depends(get_db)):
     if not original:
         raise HTTPException(status_code=404, detail="Job search not found")
     
-    # Create copy
+    # Create copy (starts inactive, so no scheduler needed)
     new_search = JobSearch(
         name=f"{original.name} (Copy)",
         actor_key=original.actor_key,
@@ -277,12 +304,14 @@ async def duplicate_search(search_id: int, db: Session = Depends(get_db)):
         clay_webhook_url=original.clay_webhook_url,
         batch_size=original.batch_size,
         batch_interval_ms=original.batch_interval_ms,
-        is_active=False  # Start inactive
+        is_active=False  # Start inactive - user must activate to schedule
     )
     
     db.add(new_search)
     db.commit()
     db.refresh(new_search)
+    
+    # Note: Not adding to scheduler since is_active=False
     
     return JobSearchResponse.model_validate(new_search)
 
@@ -390,13 +419,24 @@ async def get_run_details(run_id: int, db: Session = Depends(get_db)):
 
 
 # =============================================================================
-# HEALTH CHECK
+# HEALTH CHECK & SCHEDULER STATUS
 # =============================================================================
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "version": "2.0.0"}
+
+
+@app.get("/api/scheduler/status")
+async def scheduler_status():
+    """Get scheduler status and all scheduled jobs"""
+    jobs = scheduler.get_all_scheduled_jobs()
+    return {
+        "timezone": "America/New_York (EST)",
+        "total_scheduled": len(jobs),
+        "jobs": jobs
+    }
 
 
 # =============================================================================
