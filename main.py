@@ -600,7 +600,7 @@ async def manual_push_to_clay(
     """Manually push data from any Apify dataset to Clay webhook"""
     try:
         # Get actor config
-        actor_registry = ActorRegistry()
+        actor_registry = ActorRegistry(db)
         actor_config = actor_registry.get_actor(data.actor_key)
         
         if not actor_config:
