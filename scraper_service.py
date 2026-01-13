@@ -88,16 +88,28 @@ class ScraperService:
                     job_run, partial_jobs, actor_config, job_search, is_final
                 )
             
-            apify_result = await self.apify_service.run_actor(
-                actor_config=actor_config,
-                job_search=job_search,
-                progress_callback=progress_callback
-            )
+            # Start the actor and get dataset ID immediately
+            logger.info(f"[STEP 1] Starting Apify actor...")
             
-            # ALWAYS save run_id and dataset_id (even if actor failed)
-            job_run.apify_run_id = apify_result["run_id"]
-            job_run.apify_dataset_id = apify_result["dataset_id"]
-            self.db.commit()  # Save dataset_id immediately
+            try:
+                # This will start the actor and return dataset ID immediately
+                apify_result = await self.apify_service.run_actor(
+                    actor_config=actor_config,
+                    job_search=job_search,
+                    progress_callback=progress_callback
+                )
+                
+                # ALWAYS save run_id and dataset_id (available immediately when actor starts)
+                job_run.apify_run_id = apify_result["run_id"]
+                job_run.apify_dataset_id = apify_result["dataset_id"]
+                self.db.commit()  # Save dataset_id immediately - visible in UI right away!
+                
+                logger.info(f"[STEP 1] ✅ Dataset ID saved immediately: {apify_result['dataset_id']}")
+                
+            except Exception as e:
+                # Even if there's an exception, try to save any dataset ID we got
+                logger.error(f"[STEP 1] ❌ Actor setup failed: {e}")
+                raise
             
             # Check if actor failed
             if apify_result.get("failed"):

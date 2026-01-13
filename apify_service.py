@@ -57,10 +57,15 @@ class ApifyService:
             run_data = response.json()["data"]
             run_id = run_data["id"]
             
-            logger.info(f"Started actor run: {run_id}")
-            
-            # Get dataset ID early for progressive fetching
+            # Get dataset ID IMMEDIATELY - it's available right when actor starts
             dataset_id = run_data.get("defaultDatasetId")
+            
+            logger.info(f"Started actor run: {run_id}")
+            logger.info(f"Dataset ID available immediately: {dataset_id}")
+            
+            # Return dataset ID immediately to caller so it can be saved to DB
+            if not dataset_id:
+                logger.warning("No defaultDatasetId in response - this is unusual")
             
             # Poll for completion with progressive data fetching
             status = await self._wait_for_completion(client, run_id, timeout, dataset_id, progress_callback)
