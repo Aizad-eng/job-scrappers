@@ -280,11 +280,10 @@ class ScraperService:
             
             # Mark as complete
             execution_logs = finish_run_logging(job_run.id)
-            update_job_run_safe(self.db, job_run.id,
-                status="completed",
-                completed_at=datetime.utcnow(),
-                execution_logs=execution_logs
-            )
+            job_run.status = "completed"
+            job_run.completed_at = datetime.utcnow()
+            job_run.execution_logs = execution_logs
+            self.db.commit()
             
             # Update job search last run info
             job_search.last_run_at = datetime.utcnow()
@@ -323,12 +322,11 @@ class ScraperService:
             logger.error(f"❌ [ERROR] Failed during: {step_info}")
             
             execution_logs = finish_run_logging(job_run.id)
-            update_job_run_safe(self.db, job_run.id,
-                status="failed", 
-                error_message=f"{step_info}: {str(e)}",
-                completed_at=datetime.utcnow(),
-                execution_logs=execution_logs
-            )
+            job_run.status = "failed"
+            job_run.error_message = f"{step_info}: {str(e)}"
+            job_run.completed_at = datetime.utcnow()
+            job_run.execution_logs = execution_logs
+            self.db.commit()
             
             job_search.last_run_at = datetime.utcnow()
             job_search.last_status = "failed"
