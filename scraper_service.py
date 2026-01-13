@@ -82,11 +82,13 @@ class ScraperService:
             logger.info(f"[STEP 1] Actor inputs: {job_search.actor_inputs}")
             logger.info(f"[STEP 1] Filter rules: {job_search.filter_rules}")
             
-            # Create a progress callback that handles partial data and prevents duplicates
+            # Temporarily disable progressive callback to fix job counting issues
+            # The progressive callback is corrupting job counts
             async def progress_callback(partial_jobs, total_count, is_final):
-                return await self._handle_progressive_data(
-                    job_run, partial_jobs, actor_config, job_search, is_final
-                )
+                # Just log progress, don't process partial data for now
+                if partial_jobs:
+                    logger.info(f"[PROGRESSIVE] Progress update: {len(partial_jobs)} jobs, total: {total_count}, final: {is_final}")
+                return
             
             # Start the actor and get dataset ID immediately
             logger.info(f"[STEP 1] Starting Apify actor...")
