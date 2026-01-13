@@ -65,6 +65,8 @@ class ApifyService:
             # Poll for completion with progressive data fetching
             status = await self._wait_for_completion(client, run_id, timeout, dataset_id, progress_callback)
             
+            logger.info(f"[APIFY DEBUG] Final status check: '{status}' - Is success: {status in ['SUCCEEDED', 'FINISHED']}")
+            
             if status not in ["SUCCEEDED", "FINISHED"]:
                 raise Exception(f"Actor run failed with status: {status}")
             
@@ -184,6 +186,9 @@ class ApifyService:
             status = run_data["status"]
             attempt += 1
             elapsed_minutes = (datetime.now() - start_time).total_seconds() / 60
+            
+            # Debug logging for status issues
+            logger.info(f"[APIFY DEBUG] Run {run_id} - Raw API response status: '{status}' (type: {type(status)})")
             
             # Get dataset ID if not provided
             if not dataset_id:
