@@ -65,12 +65,21 @@ class ApifyService:
             # Poll for completion with progressive data fetching
             status = await self._wait_for_completion(client, run_id, timeout, dataset_id, progress_callback)
             
-            logger.info(f"[APIFY DEBUG] Final status check: '{status}' - Is success: {status in ['SUCCEEDED', 'FINISHED']}")
+            # ALWAYS return dataset_id regardless of success/failure
+            # Dataset is created when actor starts, not when it completes
+            logger.info(f"[APIFY] Run {run_id} finished with status: {status}, Dataset ID: {dataset_id}")
             
             if status not in ["SUCCEEDED", "FINISHED"]:
-                raise Exception(f"Actor run failed with status: {status}")
+                # Even if failed, return dataset_id and empty items
+                return {
+                    "run_id": run_id,
+                    "dataset_id": dataset_id,
+                    "status": status,
+                    "items": [],
+                    "failed": True
+                }
             
-            # Get final dataset items (dataset_id already retrieved earlier)
+            # Get final dataset items only if successful
             items = await self._get_dataset_items(client, dataset_id)
             
             return {

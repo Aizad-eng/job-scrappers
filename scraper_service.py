@@ -94,8 +94,15 @@ class ScraperService:
                 progress_callback=progress_callback
             )
             
+            # ALWAYS save run_id and dataset_id (even if actor failed)
             job_run.apify_run_id = apify_result["run_id"]
             job_run.apify_dataset_id = apify_result["dataset_id"]
+            self.db.commit()  # Save dataset_id immediately
+            
+            # Check if actor failed
+            if apify_result.get("failed"):
+                logger.error(f"[STEP 1] ❌ Apify actor failed with status: {apify_result['status']}")
+                raise Exception(f"Apify actor failed with status: {apify_result['status']}")
             
             raw_jobs = apify_result["items"]
             job_run.jobs_found = len(raw_jobs)
