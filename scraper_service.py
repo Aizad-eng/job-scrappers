@@ -21,7 +21,7 @@ from filter_service import FilterService
 from clay_service import ClayService
 from template_engine import extract_fields
 from run_logger import start_run_logging, finish_run_logging
-from db_compat import create_job_run_safe, update_job_run_safe
+# Compatibility layer no longer needed with clean database, update_job_run_safe
 
 logger = logging.getLogger(__name__)
 
@@ -55,12 +55,17 @@ class ScraperService:
         actor_config = self.actor_registry.get_actor(job_search.actor_key)
         
         # Create a job run record
-        job_run = create_job_run_safe(
-            self.db,
+        job_run = JobRun(
             job_search_id=job_search.id,
             started_at=datetime.utcnow(),
-            status="running"
+            status="running",
+            jobs_found=0,
+            jobs_filtered=0,
+            jobs_sent=0
         )
+        self.db.add(job_run)
+        self.db.commit()
+        self.db.refresh(job_run)
         
         # Start capturing logs for this run
         start_run_logging(job_run.id)
@@ -90,14 +95,7 @@ class ScraperService:
             )
             
             job_run.apify_run_id = apify_result["run_id"]
-            
-            # Use safe update for dataset ID to handle compatibility issues
-            try:
-                job_run.apify_dataset_id = apify_result["dataset_id"]
-            except AttributeError:
-                # Fallback for compatibility layer objects without apify_dataset_id attribute
-                from db_compat import update_job_run_safe
-                update_job_run_safe(self.db, job_run.id, apify_dataset_id=apify_result["dataset_id"])
+            job_run.apify_dataset_id = apify_result["dataset_id"]
             
             raw_jobs = apify_result["items"]
             job_run.jobs_found = len(raw_jobs)

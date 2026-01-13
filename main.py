@@ -399,67 +399,11 @@ async def get_search_runs(
     db: Session = Depends(get_db)
 ):
     """Get run history for a job search"""
-    try:
-        runs = db.query(JobRun).filter(
-            JobRun.job_search_id == search_id
-        ).order_by(JobRun.started_at.desc()).limit(limit).all()
-        
-        return [JobRunResponse.model_validate(r) for r in runs]
-    except Exception as e:
-        if "execution_logs does not exist" in str(e) or "InFailedSqlTransaction" in str(e):
-            # Rollback the failed transaction and create a new one
-            db.rollback()
-            db.close()
-            
-            # Create a fresh database session for the fallback query
-            from database import SessionLocal
-            from sqlalchemy import text
-            
-            fresh_db = SessionLocal()
-            try:
-                result = fresh_db.execute(text("""
-                    SELECT id, job_search_id, 
-                           COALESCE(started_at, NOW()) as started_at, 
-                           completed_at, 
-                           COALESCE(status, 'unknown') as status,
-                           COALESCE(jobs_found, 0) as jobs_found, 
-                           COALESCE(jobs_filtered, 0) as jobs_filtered, 
-                           COALESCE(jobs_sent, 0) as jobs_sent, 
-                           error_message,
-                           apify_run_id, 
-                           CASE WHEN EXISTS (
-                               SELECT 1 FROM information_schema.columns 
-                               WHERE table_name = 'job_runs' AND column_name = 'apify_dataset_id'
-                           ) THEN apify_dataset_id ELSE NULL END as apify_dataset_id,
-                           NULL as execution_logs
-                    FROM job_runs 
-                    WHERE job_search_id = :search_id 
-                    ORDER BY COALESCE(started_at, NOW()) DESC 
-                    LIMIT :limit
-                """), {"search_id": search_id, "limit": limit})
-                
-                runs = []
-                for row in result:
-                    run_dict = {
-                        "id": row[0],
-                        "job_search_id": row[1], 
-                        "started_at": row[2],
-                        "completed_at": row[3],
-                        "status": row[4] or "unknown",
-                        "jobs_found": row[5] or 0,
-                        "jobs_filtered": row[6] or 0, 
-                        "jobs_sent": row[7] or 0,
-                        "error_message": row[8],
-                        "execution_logs": None,  # Will be available after migration
-                        "apify_run_id": row[9]
-                    }
-                    runs.append(JobRunResponse.model_validate(run_dict))
-                
-                return runs
-            finally:
-                fresh_db.close()
-        else:
-            raise
+    runs = db.query(JobRun).filter(
+        JobRun.job_search_id == search_id
+    ).order_by(JobRun.started_at.desc()).limit(limit).all()
+    
+    return [JobRunResponse.model_validate(r) for r in runs]
 
 
 @app.get("/api/runs/{run_id}", response_model=JobRunDetailResponse)
