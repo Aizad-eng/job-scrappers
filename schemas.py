@@ -130,6 +130,7 @@ class JobRunResponse(BaseModel):
     error_message: Optional[str]
     execution_logs: Optional[str]
     apify_run_id: Optional[str]
+    apify_dataset_id: Optional[str]
     
     class Config:
         from_attributes = True
