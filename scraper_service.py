@@ -90,7 +90,14 @@ class ScraperService:
             )
             
             job_run.apify_run_id = apify_result["run_id"]
-            job_run.apify_dataset_id = apify_result["dataset_id"]
+            
+            # Use safe update for dataset ID to handle compatibility issues
+            try:
+                job_run.apify_dataset_id = apify_result["dataset_id"]
+            except AttributeError:
+                # Fallback for compatibility layer objects without apify_dataset_id attribute
+                from db_compat import update_job_run_safe
+                update_job_run_safe(self.db, job_run.id, apify_dataset_id=apify_result["dataset_id"])
             
             raw_jobs = apify_result["items"]
             job_run.jobs_found = len(raw_jobs)
